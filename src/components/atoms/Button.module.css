@@ -1,0 +1,43 @@
+.button {
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border: none;
+}
+
+.primary {
+    background: #0077FF;
+    color: white;
+}
+
+.primary:hover {
+    background: #005FCC;
+}
+
+.secondary {
+    background: white;
+    color: #0077FF;
+    border: 2px solid #0077FF;
+}
+
+.secondary:hover {
+    background: #E6F4FE;
+}
+
+.success {
+    background: #28a745;
+    color: white;
+}
+
+.error {
+    background: #dc3545;
+    color: white;
+}
+
+.button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
