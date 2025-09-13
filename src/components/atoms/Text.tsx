@@ -45,7 +45,12 @@ export default function Text({
     return (
         <RNText
             {...rest}
-            style={[styles[variant], { color }, fw ? { fontWeight: fw } : null, style]}
+            style={[
+                styles[variant],
+                { color },
+                fw ? { fontWeight: fw } : null,
+                style,
+            ]}
         >
             {children}
         </RNText>

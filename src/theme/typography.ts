@@ -13,3 +13,10 @@ export const fontWeights = {
     semibold: "600" as const,
     bold: "700" as const,
 };
+
+export const typography = {
+    title: { fontSize: 24, fontWeight: "700" },
+    subtitle: { fontSize: 18, fontWeight: "600" },
+    body: { fontSize: 16, fontWeight: "400" },
+    button: { fontSize: 16, fontWeight: "600", textTransform: "uppercase" },
+};

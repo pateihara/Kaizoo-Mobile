@@ -1,18 +1,19 @@
-// npm i -D babel-plugin-module-resolver
+// babel.config.js
 module.exports = function (api) {
   api.cache(true);
   return {
-    presets: ["babel-preset-expo"],
+    presets: ['babel-preset-expo'], 
     plugins: [
-      "expo-router/babel",
-      ["module-resolver", {
-        root: ["./"],
+      ['module-resolver', {
+        root: ['./'],
         alias: {
-          "@": "./src",
-          "@components": "./src/components",
-          "@theme": "./src/theme"
-        }
-      }]
-    ]
+          '@': './src',
+          '@assets': './assets',
+          '@components': './src/components',
+          '@theme': './src/theme',
+        },
+        extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+      }],
+    ],
   };
 };
