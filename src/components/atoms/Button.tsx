@@ -26,7 +26,7 @@ function getVariantStyles(variant: Variant, disabled?: boolean) {
     // seu tema: colors.brand.{primary, primaryDark, accent} e colors.gray[…]
     const brandBg = colors.brand.primary;
     const brandDisabled = colors.gray[300];
-    const brandText = colors.white;
+    const brandText = colors.black;
 
     if (variant === "secondary") {
         return {

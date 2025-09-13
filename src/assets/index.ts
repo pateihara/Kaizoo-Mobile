@@ -57,3 +57,12 @@ export const transp = {
 export const logo = {
     logo: require('@assets/images/kaizoo_logo.png'),
 } as const;
+
+
+export const iconFriend = {
+    kaia: require('@assets/images/icoKaia.png'),
+    dino: require('@assets/images/icoDino.png'),
+    koa: require('@assets/images/icoKoa.png'),
+    penny: require('@assets/images/icoPenny.png'),
+    tato: require('@assets/images/icoTato.png'),
+} as const;

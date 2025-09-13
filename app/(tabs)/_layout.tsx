@@ -1,12 +1,25 @@
+import { logo } from "@/assets";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { Image } from "react-native";
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
-        tabBarActiveTintColor: "#0ea5e9",
+        headerStyle: { backgroundColor: "black" },
+        headerTintColor: "#fff",
+        tabBarStyle: { backgroundColor: "black" },
+        tabBarActiveTintColor: "#fff",
+        tabBarInactiveTintColor: "#aaa",
+        headerTitleAlign: "center",
+        headerTitle: () => (
+          <Image
+            source={logo.logo}
+            style={{ width: 120, height: 40 }}
+            resizeMode="contain"
+          />
+        ),
       }}
     >
       <Tabs.Screen

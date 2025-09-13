@@ -2,9 +2,10 @@ import Button from "@/components/atoms/Button";
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import LevelBadge from "@/components/molecules/LevelBadge";
+import { MascotScene } from "@/components/organisms/MascotScene";
 import { spacing } from "@/theme";
 import { useRouter } from "expo-router";
-import { Image, ImageBackground, Share, StyleSheet, View } from "react-native";
+import { Share, StyleSheet, View } from "react-native";
 
 import { BG, transp } from "@/assets/";
 
@@ -32,6 +33,7 @@ type Props = {
     email?: string;
     level?: number;
     xpToNext?: number;
+    totalXPForLevel?: number;
 };
 
 export default function MascotCard({
@@ -40,6 +42,7 @@ export default function MascotCard({
     email = "pateihara@gmail.com",
     level = 5,
     xpToNext = 325,
+    totalXPForLevel = 500,
 }: Props) {
     const router = useRouter();
 
@@ -57,26 +60,16 @@ export default function MascotCard({
 
             <Card style={[styles.card, { overflow: "hidden" }]}>
                 {/* TOPO: fundo com personagem */}
-                <ImageBackground
-                    source={BG_BY_MASCOT[mascot]}
-                    style={styles.bg}
-                    imageStyle={styles.bgImage}
-                    resizeMode="cover"
-                >
-                    <Image
-                        source={CHAR_BY_MASCOT[mascot]}
-                        style={styles.character}
-                        resizeMode="contain"
-                    />
-                </ImageBackground>
+                <MascotScene
+                    bgSource={BG_BY_MASCOT[mascot]}
+                    charSource={CHAR_BY_MASCOT[mascot]}
+                />
 
-                {/* RODAPÉ: área clara (como na imagem) */}
+                {/* RODAPÉ: área clara */}
                 <View style={styles.footer}>
-
-
                     <View style={{ alignItems: "center", gap: spacing.xs }}>
                         <Text variant="subtitle" weight="bold">Nível {level}</Text>
-                        <LevelBadge level={level} xpToNext={xpToNext} />
+                        <LevelBadge level={level} xpToNext={xpToNext} totalXPForLevel={totalXPForLevel} />
                     </View>
 
                     <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>

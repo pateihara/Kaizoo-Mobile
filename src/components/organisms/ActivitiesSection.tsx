@@ -1,3 +1,4 @@
+// ActivitiesSection.tsx
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import ActivityChip from "@/components/molecules/ActivityChip";
@@ -16,9 +17,16 @@ export default function ActivitiesSection() {
             <Text variant="subtitle" weight="bold" style={{ marginBottom: spacing.sm }}>
                 Minhas Atividades
             </Text>
+
             <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
                 {MOCK_ACTIVITIES.map((a, idx) => (
-                    <ActivityChip key={idx} icon={a.icon} label={a.label} />
+                    <ActivityChip
+                        key={idx}
+                        icon={a.icon as any} // usa os aliases acima
+                        label={a.label}
+                        size={40}            // maior para não ficar “miúdo”
+                        variant="ghost"      // 👈 sem fundo cinza
+                    />
                 ))}
             </View>
         </Card>
