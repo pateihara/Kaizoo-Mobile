@@ -5,6 +5,10 @@ export const mascots = {
     koa: require('@assets/images/card-koa.png'),
     penny: require('@assets/images/card-penny.png'),
     tato: require('@assets/images/card-tato.png'),
+    turtle: require('@assets/images/turtle.png'),
+    group: require('@assets/images/group.png'),
+
+
 } as const;
 
 export const mascotDescriptions = {
@@ -23,9 +27,7 @@ export const badges = {
     star: require('@assets/images/star.png'),
     starDino: require('@assets/images/StarDino.png'),
     starKoa: require('@assets/images/StarKoa.png'),
-    starPenny: require('@assets/images/StarPenny.png'),
-    starTato: require('@assets/images/StarTato.png'),
-    xpStar: require('@assets/images/xpStar.png'),
+
 } as const;
 
 export const bitmapIcons = {
@@ -49,9 +51,6 @@ export const BG = {
 export const transp = {
     BGKaia: require('@assets/images/kaiaWalkingBack.png'),
     walk: require('@assets/images/DinoExerciseBack.png'),
-    person: require('@assets/images/KoaChildBack.png'),
-    addReaction: require('@assets/images/PennyMedBack.png'),
-    more: require('@assets/images/TatoListingBack.png'),
 } as const;
 
 export const logo = {
@@ -65,4 +64,9 @@ export const iconFriend = {
     koa: require('@assets/images/icoKoa.png'),
     penny: require('@assets/images/icoPenny.png'),
     tato: require('@assets/images/icoTato.png'),
+} as const;
+export const onboarding = {
+    checklist: require('@assets/images/checklist.png'),
+    xp: require('@assets/images/xp.png'),
+
 } as const;

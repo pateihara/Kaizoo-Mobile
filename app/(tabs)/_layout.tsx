@@ -1,9 +1,42 @@
+// app/(tabs)/_layout.tsx
 import { logo } from "@/assets";
+import { hasSeenOnboarding, isLoggedIn } from "@/services/auth";
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router"; // <-- Redirect
+import * as SplashScreen from "expo-splash-screen"; // <-- splash opcional
+import React, { useEffect, useState } from "react"; // <-- estado/efeito
 import { Image } from "react-native";
 
+SplashScreen.preventAutoHideAsync().catch(() => { });
+
 export default function TabsLayout() {
+  const [ready, setReady] = useState(false);
+  const [logged, setLogged] = useState<boolean | null>(null);
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [l, o] = await Promise.all([isLoggedIn(), hasSeenOnboarding()]);
+        setLogged(l);
+        setOnboarded(o);
+      } finally {
+        setReady(true);
+        SplashScreen.hideAsync().catch(() => { });
+      }
+    })();
+  }, []);
+
+  // Evita flicker enquanto checa estado
+  if (!ready || logged === null || onboarded === null) return null;
+
+  // Regras:
+  // 1) Nunca viu onboarding -> manda pro onboarding
+  if (!onboarded) return <Redirect href="/(auth)/cover" />;
+  // 2) Viu onboarding mas não está logado -> manda pro login (ajuste a rota se a sua for outra)
+  if (!logged) return <Redirect href="/(auth)/login" />;
+
+  // 3) Logado + Onboarding visto -> libera as tabs
   return (
     <Tabs
       screenOptions={{

@@ -1,54 +1,76 @@
-import { colors } from "@/theme";
+// src/components/atoms/Text.tsx
+import { colors, fonts, textVariants } from "@/theme";
 import React from "react";
 import {
     Text as RNText,
     TextProps as RNTextProps,
-    StyleSheet,
     TextStyle,
 } from "react-native";
 
-type Variant = "title" | "subtitle" | "body" | "button";
+type Variant = keyof typeof textVariants;
 type WeightKeyword = "regular" | "medium" | "semibold" | "bold";
 type RNFontWeight = NonNullable<TextStyle["fontWeight"]>;
+
+/** Aceita palavras-chave (regular/medium/semibold/bold) ou valores numéricos ("400"..."700") */
 type Weight = WeightKeyword | RNFontWeight;
 
-type Props = RNTextProps & {
-    variant?: Variant;
-    color?: string;
-    weight?: Weight;
+export type TextProps = RNTextProps & {
+    variant?: Variant;                         // "title" | "subtitle" | "body" | "button" | ...
+    weight?: Weight;                           // controla peso (via fontFamily/fallback fontWeight)
+    color?: string;                            // override de cor
+    align?: TextStyle["textAlign"];            // "left" | "center" | "right" | ...
     children: React.ReactNode;
 };
 
-const weightMap: Record<WeightKeyword, RNFontWeight> = {
-    regular: "400",
-    medium: "500",
-    semibold: "600",
-    bold: "700",
-};
-
-function resolveWeight(weight?: Weight): RNFontWeight | undefined {
+function resolveFontFamily(weight?: WeightKeyword): string | undefined {
     if (!weight) return undefined;
-    if (typeof weight === "number") return String(weight) as RNFontWeight;
-    return (weightMap[weight as WeightKeyword] ?? weight) as RNFontWeight;
+    switch (weight) {
+        case "regular":
+            return fonts.family.regular;
+        case "medium":
+            return fonts.family.medium;
+        case "semibold":
+            // não temos face semibold; escolha a que preferir como fallback
+            return fonts.family.medium; // ou fonts.family.bold se quiser mais forte
+        case "bold":
+            return fonts.family.bold;
+        default:
+            return undefined;
+    }
 }
 
 export default function Text({
     variant = "body",
-    color = colors.gray[900],
     weight,
+    color = colors.ui.text,
+    align,
     style,
     children,
     ...rest
-}: Props) {
-    const fw = resolveWeight(weight);
+}: TextProps) {
+    // Se vier numérico ("600"), usamos fontWeight; se vier keyword, usamos fontFamily
+    const isNumeric =
+        typeof weight === "string" &&
+        /^\d{3}$/.test(weight); // "400" | "500" | "600" | "700" ...
+
+    const family = !isNumeric && typeof weight === "string"
+        ? resolveFontFamily(weight as WeightKeyword)
+        : undefined;
+
+    const weightStyle: TextStyle | undefined = isNumeric
+        ? { fontWeight: weight as RNFontWeight }
+        : family
+            ? { fontFamily: family }
+            : undefined;
 
     return (
         <RNText
             {...rest}
             style={[
-                styles[variant],
+                textVariants[variant],
                 { color },
-                fw ? { fontWeight: fw } : null,
+                align ? { textAlign: align } : null,
+                weightStyle,
                 style,
             ]}
         >
@@ -56,10 +78,3 @@ export default function Text({
         </RNText>
     );
 }
-
-const styles = StyleSheet.create({
-    title: { fontSize: 24, fontWeight: "700" },
-    subtitle: { fontSize: 18, fontWeight: "600" },
-    body: { fontSize: 16, fontWeight: "400" },
-    button: { fontSize: 16, fontWeight: "600", textTransform: "uppercase" },
-});

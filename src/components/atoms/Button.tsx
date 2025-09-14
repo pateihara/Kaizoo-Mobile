@@ -1,5 +1,5 @@
 import Text from "@/components/atoms/Text";
-import { colors, radius, spacing } from "@/theme";
+import { colors, radii, spacing } from "@/theme"; // <-- importa radii
 import React from "react";
 import { ActivityIndicator, Pressable, ViewStyle } from "react-native";
 
@@ -23,10 +23,9 @@ export type ButtonProps = {
 };
 
 function getVariantStyles(variant: Variant, disabled?: boolean) {
-    // seu tema: colors.brand.{primary, primaryDark, accent} e colors.gray[…]
     const brandBg = colors.brand.primary;
     const brandDisabled = colors.gray[300];
-    const brandText = colors.black;
+    const brandText = colors.white;
 
     if (variant === "secondary") {
         return {
@@ -59,13 +58,13 @@ export default function Button({
     loading,
     style,
     label,
-    title,     // <- compat
+    title, // compat
     children,
-    fullWidth, // <- novo
+    fullWidth,
     accessibilityLabel,
 }: ButtonProps) {
     const vs = getVariantStyles(variant, disabled);
-    const text = label ?? title; // mantém compatibilidade
+    const text = label ?? title;
 
     return (
         <Pressable
@@ -76,7 +75,7 @@ export default function Button({
                 {
                     height: 44,
                     width: fullWidth ? "100%" : undefined,
-                    borderRadius: radius.md,
+                    borderRadius: radii.md, // <-- usa radii aqui
                     paddingHorizontal: spacing.md,
                     alignItems: "center",
                     justifyContent: "center",
