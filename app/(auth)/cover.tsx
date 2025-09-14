@@ -9,7 +9,7 @@ import { Image, View } from "react-native";
 export default function Cover() {
     useEffect(() => {
         const t = setTimeout(() => {
-            router.replace("/(auth)/onboarding" as Href);
+            router.replace("/onboarding" as Href);
         }, 2000); // 2 segundos
 
         return () => clearTimeout(t);

@@ -32,7 +32,7 @@ export default function TabsLayout() {
 
   // Regras:
   // 1) Nunca viu onboarding -> manda pro onboarding
-  if (!onboarded) return <Redirect href="/(auth)/cover" />;
+  if (!onboarded) return <Redirect href="/cover" />;
   // 2) Viu onboarding mas não está logado -> manda pro login (ajuste a rota se a sua for outra)
   if (!logged) return <Redirect href="/(auth)/login" />;
 
