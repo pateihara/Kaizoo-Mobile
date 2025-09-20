@@ -63,20 +63,16 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: "black" },
-          headerTintColor: "#fff",
-          contentStyle: { backgroundColor: "black" },
-        }}
-      >
-        {/* Oculta o header do Stack para o grupo (tabs) —
-            o header passará a ser o das próprias Tabs */}
+      return (
+      <Stack screenOptions={{ headerShown: false }}>
+        {/* index da raiz decide para onde mandar */}
+        <Stack.Screen name="index" />
+        {/* pasta do onboarding */}
+        <Stack.Screen name="onboarding/index" />
+        {/* grupo de tabs (já deve ter seu próprio _layout dentro de (tabs) */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-
-        {/* Exemplo de outras rotas fora das tabs:
-        <Stack.Screen name="modal" options={{ presentation: "modal" }} /> */}
       </Stack>
+      )
     </>
   );
 }
