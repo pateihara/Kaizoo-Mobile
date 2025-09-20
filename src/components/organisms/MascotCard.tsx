@@ -72,15 +72,18 @@ export default function MascotCard({
                         <LevelBadge level={level} xpToNext={xpToNext} totalXPForLevel={totalXPForLevel} />
                     </View>
 
-                    <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>
+                    <View style={{ flexDirection: "column", gap: spacing.sm, width: "100%" }}>
                         <Button
                             label="Registrar Atividade"
                             onPress={() => router.push("/atividade")}
                             fullWidth
                         />
-                        <Button variant="secondary" style={{ flex: 1 }} onPress={shareMessage}>
-                            <Text variant="button">Compartilhar</Text>
-                        </Button>
+                        <Button
+                            label="Compartilhar"
+                            variant="secondary"
+                            onPress={shareMessage}
+                            fullWidth
+                        />
                     </View>
                 </View>
             </Card>

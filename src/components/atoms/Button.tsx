@@ -1,5 +1,5 @@
 import Text from "@/components/atoms/Text";
-import { colors, radii, spacing } from "@/theme"; // <-- importa radii
+import { colors, radius, spacing } from "@/theme";
 import React from "react";
 import { ActivityIndicator, Pressable, ViewStyle } from "react-native";
 
@@ -23,15 +23,16 @@ export type ButtonProps = {
 };
 
 function getVariantStyles(variant: Variant, disabled?: boolean) {
+    // seu tema: colors.brand.{primary, primaryDark, accent} e colors.gray[…]
     const brandBg = colors.brand.primary;
     const brandDisabled = colors.gray[300];
-    const brandText = colors.white;
+    const brandText = colors.ui.inverse;
 
     if (variant === "secondary") {
         return {
-            backgroundColor: disabled ? colors.gray[200] : colors.gray[100],
-            textColor: colors.gray[900],
-            borderColor: colors.gray[200],
+            backgroundColor: disabled ? colors.gray[200] : colors.mascots.paleTurquoise,
+            textColor: colors.brand.primary,
+            borderColor: "transparent",
         };
     }
 
@@ -58,13 +59,13 @@ export default function Button({
     loading,
     style,
     label,
-    title, // compat
+    title,     // <- compat
     children,
-    fullWidth,
+    fullWidth, // <- novo
     accessibilityLabel,
 }: ButtonProps) {
     const vs = getVariantStyles(variant, disabled);
-    const text = label ?? title;
+    const text = label ?? title; // mantém compatibilidade
 
     return (
         <Pressable
@@ -75,7 +76,7 @@ export default function Button({
                 {
                     height: 44,
                     width: fullWidth ? "100%" : undefined,
-                    borderRadius: radii.md, // <-- usa radii aqui
+                    borderRadius: radius.md,
                     paddingHorizontal: spacing.md,
                     alignItems: "center",
                     justifyContent: "center",
@@ -92,7 +93,11 @@ export default function Button({
             ) : children ? (
                 children
             ) : (
-                <Text variant="button" color={vs.textColor as string}>
+                <Text
+                    variant="button"
+                    color={vs.textColor as string}
+                    style={{ textAlign: "center", width: "100%" }}
+                >
                     {text}
                 </Text>
             )}

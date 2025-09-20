@@ -16,7 +16,7 @@ export const colors = {
         border: "#E5E7EB",
     },
     brand: {
-        primary: "#000", // destaque/ação (PaleTurquoise)
+        primary: "#000",
         onPrimary: "#1E1E1E",
         // opcionais para estados
         primaryHover: "#7EDFD0",

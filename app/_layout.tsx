@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { badges, BG, bitmapIcons, iconFriend, logo, mascots, onboarding, transp } from "@/assets";
+import { badges, BG, bitmapIcons, iconFriend, logo, mascots, transp } from "@/assets";
 import {
   Poppins_400Regular,
   Poppins_500Medium,
@@ -41,8 +41,6 @@ export default function RootLayout() {
           ...Object.values(transp),
           ...Object.values(logo),
           ...Object.values(iconFriend),
-          ...Object.values(onboarding),
-
         ] as number[];
         await Asset.loadAsync(toLoad);
       } catch {
