@@ -2,8 +2,9 @@
 module.exports = function (api) {
   api.cache(true);
   return {
-    presets: ['babel-preset-expo'], 
+    presets: ['babel-preset-expo'],
     plugins: [
+      require.resolve('expo-router/babel'),
       ['module-resolver', {
         root: ['./'],
         alias: {
@@ -14,6 +15,7 @@ module.exports = function (api) {
         },
         extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
       }],
+      'react-native-reanimated/plugin', 
     ],
   };
 };

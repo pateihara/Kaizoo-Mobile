@@ -1,5 +1,6 @@
+// app/onboarding/index.tsx
+
 import { colors, radius, spacing } from "@/theme";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -82,10 +83,8 @@ export default function OnboardingScreen() {
     };
 
     const skipOrFinish = async () => {
-        await AsyncStorage.setItem("hasOnboarded", "1");
-        router.replace("/(tabs)"); // << ajuste se sua home for outra
+        router.replace("/register"); // ou "/login", como preferir
     };
-
     if (showSplash) {
         return (
             <View style={[styles.screen, { justifyContent: "center", alignItems: "center", backgroundColor: "black" }]}>
