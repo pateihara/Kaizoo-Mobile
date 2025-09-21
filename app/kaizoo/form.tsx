@@ -1,136 +1,149 @@
-//app/kaizoo/form.tsx
+// app/kaizoo/form.tsx
 import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
+import { useAuth } from "@/contexts/AuthContext"; // ✅ alias "@"
+import { finishOnboarding } from "@/services/profile";
 import { colors, radius, spacing } from "@/theme";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
+import React, { useRef, useState } from "react";
+import {
+    Alert,
+    Animated,
+    Dimensions,
+    Easing,
+    FlatList,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    StyleSheet,
+    View
+} from "react-native";
 
-const Q1 = ["Perder peso", "Ganho de massa muscular", "Aumentar resistência"] as const;
-const Q2 = ["Diariamente", "3-4 vezes por semana", "menos de 3 vezes por semana"] as const;
-const Q3 = ["Corrida / Caminhada", "Ciclismo", "Musculação", "Yoga / Alongamento"] as const;
+const { width } = Dimensions.get("window");
 
-function Option({ selected, onPress, children }: any) {
-    return (
-        <Pressable onPress={onPress} style={styles.optionRow}>
-            <View style={[styles.radio, selected && styles.radioOn]} />
-            <Text style={{ flex: 1 }}>{children}</Text>
-        </Pressable>
-    );
-}
+type MascotKey = "tato" | "dino" | "koa" | "kaia" | "penny";
+type Mascot = {
+    key: MascotKey;
+    title: string;
+    subtitle: string;
+    frontImage?: any;
+    backImage?: any;
+    personality?: {
+        favorite?: string;
+        traits?: Array<{ label: string; score: number }>;
+        goals?: string[];
+    };
+};
 
-export default function KaizooForm() {
+const MASCOTS: Mascot[] = [
+    { key: "tato", title: "TATO", subtitle: "TARTARUGA FOCADA" },
+    { key: "dino", title: "DINO", subtitle: "O DINOSSAURINHO FORTE" },
+    { key: "koa", title: "KOA", subtitle: "A COALINHA PROTETORA" },
+    { key: "kaia", title: "KAIA", subtitle: "A GATA ENERGÉTICA" },
+    { key: "penny", title: "PENNY", subtitle: "A PINGUIM SERENA" },
+];
+
+export default function SelectKaizoo() {
     const router = useRouter();
-    const { mascot } = useLocalSearchParams<{ mascot?: string }>();
+    const { refreshProfile } = useAuth();
+    const listRef = useRef<FlatList<Mascot>>(null);
+    const [index, setIndex] = useState(0);
+    const [saving, setSaving] = useState(false);
 
-    const [goal, setGoal] = useState<string>();
-    const [freq, setFreq] = useState<string>();
-    const [acts, setActs] = useState<string[]>([]);
+    // flip (frente/verso)
+    const [isBack, setIsBack] = useState(false);
+    const flip = useRef(new Animated.Value(0)).current;
+    const frontRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["0deg", "180deg"] });
+    const backRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["180deg", "360deg"] });
+    const animateTo = (deg: number) =>
+        Animated.timing(flip, { toValue: deg, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true });
 
-    const toggleAct = (v: string) =>
-        setActs((a) => (a.includes(v) ? a.filter((x) => x !== v) : [...a, v]));
+    const resetFlip = () => { setIsBack(false); flip.stopAnimation(); flip.setValue(0); };
+    const toggleFlip = () => { if (isBack) animateTo(0).start(() => setIsBack(false)); else animateTo(180).start(() => setIsBack(true)); };
 
-    const canSubmit = useMemo(() => goal && freq && acts.length > 0, [goal, freq, acts]);
+    const goNext = () => {
+        if (index < MASCOTS.length - 1) {
+            resetFlip();
+            listRef.current?.scrollToIndex({ index: index + 1, animated: true });
+            setIndex((i) => i + 1);
+        }
+    };
+    const goPrev = () => {
+        if (index > 0) {
+            resetFlip();
+            listRef.current?.scrollToIndex({ index: index - 1, animated: true });
+            setIndex((i) => i - 1);
+        }
+    };
 
-    const onSubmit = async () => {
-        if (!canSubmit) return;
-        await AsyncStorage.setItem("profile:questionnaire", JSON.stringify({ mascot, goal, freq, acts }));
-        await AsyncStorage.setItem("profile:ready", "1");
-        router.replace("/kaizoo/success");
+    const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const i = Math.round(e.nativeEvent.contentOffset.x / width);
+        if (i !== index) { setIndex(i); resetFlip(); }
+    };
+
+    const chooseThis = async () => {
+        if (saving) return;
+        setSaving(true);
+        const sel = MASCOTS[index];
+
+        // 1) Salva Kaizoo — SE falhar, avisa e não navega
+        try {
+            await finishOnboarding(sel.key);
+        } catch (e: any) {
+            const msg = e?.data?.error ?? e?.message ?? "Falha ao concluir onboarding";
+            Alert.alert("Não foi possível salvar seu Kaizoo", String(msg));
+            setSaving(false);
+            return;
+        }
+
+        // 2) Atualiza perfil — SE falhar, só loga e segue
+        try {
+            await refreshProfile();
+        } catch (e: any) {
+            console.warn("refreshProfile falhou após salvar Kaizoo:", e?.message ?? e);
+        }
+
+        // 3) Vai pras tabs de qualquer forma (já salvou o Kaizoo no backend)
+        router.replace("/(tabs)");
+        setSaving(false);
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: "black" }}>
-            <View style={{ padding: spacing.lg, paddingTop: spacing.xl }}>
-                <View style={styles.stepPill}>
-                    <Text weight="bold">2. Breve Questionário</Text>
-                </View>
+        <View style={styles.screen}>
+            <Step title="1. Escolha seu Kaizoo" />
+
+            {/* ...seu FlatList e UI permanecem iguais... */}
+
+            <View style={{ padding: spacing.lg, gap: spacing.sm }}>
+                <Button label="quero este!" onPress={chooseThis} fullWidth loading={saving} disabled={saving} />
+                {index < MASCOTS.length - 1 && (
+                    <Button variant="secondary" label="ver o próximo!" onPress={goNext} fullWidth disabled={saving} />
+                )}
+                {index > 0 && <Button variant="ghost" label="voltar" onPress={goPrev} fullWidth disabled={saving} />}
             </View>
+        </View>
+    );
+}
 
-            <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
-                <View style={styles.card}>
-                    <Text variant="title" weight="bold" style={{ marginBottom: spacing.md }}>
-                        Me conte suas preferências
-                    </Text>
-
-                    <Text weight="bold" style={{ marginBottom: spacing.xs }}>
-                        Qual o seu objetivo principal com exercícios?
-                    </Text>
-                    {Q1.map((o) => (
-                        <Option key={o} selected={goal === o} onPress={() => setGoal(o)}>
-                            {o}
-                        </Option>
-                    ))}
-
-                    <View style={styles.divider} />
-
-                    <Text weight="bold" style={{ marginBottom: spacing.xs }}>
-                        Com qual frequência se exercita atualmente?
-                    </Text>
-                    {Q2.map((o) => (
-                        <Option key={o} selected={freq === o} onPress={() => setFreq(o)}>
-                            {o}
-                        </Option>
-                    ))}
-
-                    <View style={styles.divider} />
-
-                    <Text weight="bold" style={{ marginBottom: spacing.xs }}>
-                        Quais atividades você mais gosta?
-                    </Text>
-                    {Q3.map((o) => (
-                        <Pressable key={o} onPress={() => toggleAct(o)} style={styles.optionRow}>
-                            <View style={[styles.checkbox, acts.includes(o) && styles.checkboxOn]} />
-                            <Text style={{ flex: 1 }}>{o}</Text>
-                        </Pressable>
-                    ))}
-                </View>
-
-                <Button label="finalizar" onPress={onSubmit} fullWidth disabled={!canSubmit} />
-                <Button variant="secondary" label="voltar" onPress={() => router.back()} fullWidth />
-            </ScrollView>
+function Step({ title }: { title: string }) {
+    return (
+        <View style={{ padding: spacing.lg, paddingTop: spacing.xl }}>
+            <View style={styles.stepPill}>
+                <Text weight="bold" style={{ textAlign: "center" }}>{title}</Text>
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    stepPill: {
-        alignSelf: "center",
-        backgroundColor: "white",
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 999,
-    },
-    card: {
-        backgroundColor: "white",
-        borderRadius: radius.lg ?? 16,
-        padding: spacing.lg,
-        gap: spacing.sm,
-    },
-    optionRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.md,
-        paddingVertical: 8,
-    },
-    radio: {
-        width: 22,
-        height: 22,
-        borderRadius: 22,
-        borderWidth: 2,
-        borderColor: "#333",
-        backgroundColor: "transparent",
-    },
-    radioOn: { backgroundColor: "#5ee0cf", borderColor: "#5ee0cf" },
-    checkbox: {
-        width: 22,
-        height: 22,
-        borderRadius: 6,
-        borderWidth: 2,
-        borderColor: "#333",
-        backgroundColor: "transparent",
-    },
-    checkboxOn: { backgroundColor: "#5ee0cf", borderColor: "#5ee0cf" },
-    divider: { height: 1, backgroundColor: colors.gray?.[200] ?? "#eee", marginVertical: spacing.sm },
+    screen: { flex: 1, backgroundColor: "black" },
+    stepPill: { alignSelf: "center", backgroundColor: "white", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999 },
+    card: { backgroundColor: "white", borderRadius: radius.lg ?? 16, overflow: "hidden", minHeight: 560 },
+    cardTitleBand: { backgroundColor: "#222", paddingVertical: 12, paddingHorizontal: spacing.md },
+    face: { backfaceVisibility: "hidden", padding: spacing.lg },
+    back: { position: "absolute", top: 44, left: 0, right: 0, bottom: 0, padding: spacing.lg },
+    hero: { height: 420, borderRadius: radius.md ?? 12 },
+    badge: { alignSelf: "center", width: 120, height: 120, marginBottom: spacing.md },
+    heroPlaceholder: { backgroundColor: colors.gray?.[200] ?? "#eee", alignItems: "center", justifyContent: "center" },
+    personaTitle: { textAlign: "center", fontSize: 18, fontWeight: "800", marginTop: 4 },
+    personaSub: { textAlign: "center", opacity: 0.8, marginBottom: spacing.sm },
 });

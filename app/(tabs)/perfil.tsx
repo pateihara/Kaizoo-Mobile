@@ -1,44 +1,25 @@
 // app/(tabs)/perfil.tsx
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Alert, StyleSheet, Switch, View } from "react-native";
 
 import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
+import { useAuth } from "@/contexts/AuthContext";
 import { colors, radius, spacing } from "@/theme";
-
-type StoredUser = { email: string; password: string };
 
 export default function PerfilScreen() {
     const router = useRouter();
+    const { user, signOut } = useAuth();
 
-    const [email, setEmail] = useState<string>("");
     const [notifEnabled, setNotifEnabled] = useState(true);
     const [darkMode, setDarkMode] = useState(false);
 
-    useEffect(() => {
-        (async () => {
-            const raw = await AsyncStorage.getItem("auth:user");
-            if (raw) {
-                try {
-                    const u = JSON.parse(raw) as StoredUser;
-                    setEmail(u?.email ?? "");
-                } catch { }
-            }
-        })();
-    }, []);
-
     const onSignOut = async () => {
-        // Desloga sem apagar dados de perfil (mascote, profile:ready, etc.)
-        await AsyncStorage.multiRemove(["auth:isLoggedIn"]);
-
-        // Evita POP_TO_TOP e centraliza decisão no app/index.tsx
-        requestAnimationFrame(() => {
-            router.replace("/onboarding"); // index decide: onboarding / tabs / select
-        });
+        await signOut();
+        router.replace("/(auth)/login");
     };
-    // (opcional) reset total para QA/dev – mantém mascot/ready
+
     const onResetAll = async () => {
         Alert.alert(
             "Resetar app",
@@ -49,8 +30,9 @@ export default function PerfilScreen() {
                     text: "Resetar",
                     style: "destructive",
                     onPress: async () => {
-                        await AsyncStorage.multiRemove(["auth:isLoggedIn", "auth:user", "hasOnboarded"]);
-                        requestAnimationFrame(() => router.replace("/onboarding"));
+                        await signOut();
+                        // Sem flags no AsyncStorage: manda direto pro onboarding
+                        router.replace("/onboarding");
                     },
                 },
             ]
@@ -68,7 +50,9 @@ export default function PerfilScreen() {
                     <Text variant="subtitle" weight="bold" style={{ color: "white" }}>
                         Seu perfil
                     </Text>
-                    <Text style={{ color: colors.gray[300] }}>{email || "sem e-mail cadastrado"}</Text>
+                    <Text style={{ color: colors.gray[300] }}>
+                        {user?.email || "sem e-mail cadastrado"}
+                    </Text>
                 </View>
             </View>
 

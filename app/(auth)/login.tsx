@@ -1,9 +1,9 @@
 // app/(auth)/login.tsx
 import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
-import { signIn } from "@/services/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import { colors, spacing } from "@/theme";
-import { useNavigation, useRouter } from "expo-router"; // ← importei useNavigation
+import { useNavigation, useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
     Alert,
@@ -33,11 +33,12 @@ export default function LoginScreen() {
         else router.replace("/onboarding");
     };
 
+    const { login } = useAuth();
+
     const onLogin = async () => {
         setLoading(true);
         try {
-            await signIn(email.trim(), pass);
-            // Deixe o app/index.tsx decidir o destino (tabs / kaizoo / onboarding)
+            await login(email.trim(), pass);   // salva tokens e seta user no contexto
             router.replace("/");
         } catch (e: any) {
             Alert.alert("Erro ao entrar", e.message ?? String(e));

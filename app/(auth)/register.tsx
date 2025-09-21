@@ -1,10 +1,8 @@
 // app/(auth)/register.tsx
-
 import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
-import { signUp } from "@/services/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import { colors, spacing } from "@/theme";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
@@ -26,9 +24,10 @@ export default function RegisterScreen() {
     const [pass2, setPass2] = useState("");
     const [loading, setLoading] = useState(false);
 
-    // refs para encadear Enter/Next
     const passRef = useRef<TextInput>(null);
     const confirmRef = useRef<TextInput>(null);
+
+    const { register } = useAuth();
 
     const onCreate = async () => {
         if (pass !== pass2) {
@@ -37,16 +36,11 @@ export default function RegisterScreen() {
         }
         setLoading(true);
         try {
-            await signUp(email.trim(), pass);
-            // Marca como logado, mas perfil ainda não concluído (conta nova)
-            await AsyncStorage.setItem("auth:isLoggedIn", "1");
-            await AsyncStorage.setItem("profile:ready", "0");
-            await AsyncStorage.removeItem("profile:mascot"); // garante que é novo fluxo
-
-            // Conta nova => começa no Select (depois Forms → Finalização → Home)
+            await register(email.trim(), pass);
+            // Após criar/login automático, vai para a escolha do Kaizoo
             router.replace("/kaizoo/select");
         } catch (e: any) {
-            Alert.alert("Erro ao criar conta", e.message ?? String(e));
+            Alert.alert("Erro ao criar conta", e?.message ?? String(e));
         } finally {
             setLoading(false);
         }
@@ -56,7 +50,6 @@ export default function RegisterScreen() {
         <KeyboardAvoidingView
             style={styles.screen}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            // se tivesse header visível, ajuste esse offset (ex.: 64)
             keyboardVerticalOffset={0}
         >
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -65,7 +58,6 @@ export default function RegisterScreen() {
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* <Image source={require("@/assets/mascots/hero.png")} style={styles.hero} resizeMode="contain" /> */}
                     <Text variant="title" weight="bold" style={styles.title}>
                         Seja{"\n"}Bem vindo!
                     </Text>
@@ -121,7 +113,7 @@ export default function RegisterScreen() {
                     <View style={{ height: spacing.sm }} />
                     <Button
                         variant="ghost"
-                        onPress={() => router.push("/login")}
+                        onPress={() => router.replace("/(auth)/login")}
                         fullWidth
                         label="já tenho conta"
                     />
@@ -133,7 +125,6 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
     screen: { flex: 1, backgroundColor: "black" },
-    // flexGrow permite rolar quando o teclado ocupa espaço
     content: {
         flexGrow: 1,
         padding: spacing.lg,
@@ -141,7 +132,6 @@ const styles = StyleSheet.create({
         gap: spacing.md,
         justifyContent: "flex-end",
     },
-    hero: { alignSelf: "center", width: 260, height: 180, marginBottom: spacing.lg },
     title: { color: "white", textAlign: "center", marginBottom: spacing.md },
     input: {
         height: 56,

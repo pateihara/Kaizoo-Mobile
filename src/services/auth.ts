@@ -1,45 +1,41 @@
 // src/services/auth.ts
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { apiFetch, tokenStore } from "./api";
 
-const USER_KEY = "auth:user";         // { email, password }
-const TOKEN_KEY = "auth:isLoggedIn";  // "1" | undefined
+export async function register(email: string, password: string, name?: string) {
+    const r = await apiFetch("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ email, password, name }),
+    }, false);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data?.error ?? "Falha no cadastro");
+    return data.user;
+}
 
-export type User = { email: string; password: string };
+export async function login(email: string, password: string) {
+    const r = await apiFetch("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+    }, false);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data?.error ?? "Falha no login");
+    await tokenStore.setTokens(data.tokens.accessToken, data.tokens.refreshToken);
+    return data.user as { id: string; email: string; name?: string; profileReady?: boolean; kaizoo?: string | null };
+}
 
-const emailOk = (v: string) => /\S+@\S+\.\S+/.test(v);
+export async function me() {
+    const r = await apiFetch("/auth/me");
+    const data = await r.json();
+    if (!r.ok) throw new Error(data?.error ?? "Falha ao obter perfil");
+    return data.user;
+}
 
-export async function signUp(email: string, password: string) {
-    if (!emailOk(email)) throw new Error("E-mail inválido");
-    if ((password ?? "").length < 6) throw new Error("Senha deve ter 6+ caracteres");
-
-    const saved = await AsyncStorage.getItem(USER_KEY);
-    if (saved) {
-        const u = JSON.parse(saved) as User;
-        if (u.email.toLowerCase() === email.toLowerCase()) {
-            throw new Error("Já existe uma conta com esse e-mail");
-        }
+export async function logout() {
+    const refresh = await tokenStore.getRefresh();
+    if (refresh) {
+        await apiFetch("/auth/logout", {
+            method: "POST",
+            body: JSON.stringify({ refreshToken: refresh }),
+        }, false);
     }
-
-    const user: User = { email, password };
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
-    await AsyncStorage.setItem(TOKEN_KEY, "1");
-}
-
-export async function signIn(email: string, password: string) {
-    const saved = await AsyncStorage.getItem(USER_KEY);
-    if (!saved) throw new Error("Usuário não encontrado. Crie uma conta.");
-    const u = JSON.parse(saved) as User;
-    if (u.email.toLowerCase() !== email.toLowerCase() || u.password !== password) {
-        throw new Error("Credenciais inválidas");
-    }
-    await AsyncStorage.setItem(TOKEN_KEY, "1");
-}
-
-export async function signOut() {
-    await AsyncStorage.removeItem(TOKEN_KEY);
-}
-
-export async function isLoggedIn() {
-    const t = await AsyncStorage.getItem(TOKEN_KEY);
-    return t === "1";
+    await tokenStore.clearTokens();
 }

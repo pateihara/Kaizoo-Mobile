@@ -83,7 +83,7 @@ export default function OnboardingScreen() {
     };
 
     const skipOrFinish = async () => {
-        router.replace("/register"); // ou "/login", como preferir
+        router.replace("/(auth)/register");
     };
     if (showSplash) {
         return (
@@ -126,7 +126,7 @@ export default function OnboardingScreen() {
             <View style={styles.ctaWrapper}>
                 <Pressable style={styles.cta} onPress={index === SLIDES.length - 1 ? skipOrFinish : next}>
                     <Text style={styles.ctaText}>
-                        {index === SLIDES.length - 1 ? "escolher meu Kaizoo!" : "continuar"}
+                        {index === SLIDES.length - 1 ? "criar minha conta" : "continuar"}
                     </Text>
                 </Pressable>
 

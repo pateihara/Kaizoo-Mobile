@@ -13,6 +13,9 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 
+// ✅ use o alias padrão do projeto
+import { AuthProvider } from "@/contexts/AuthContext";
+
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
 export default function RootLayout() {
@@ -24,12 +27,10 @@ export default function RootLayout() {
     Poppins_700Bold,
   });
 
-  // Desativa o keep-awake no dev (evita o erro no Android)
   useEffect(() => {
     deactivateKeepAwake().catch(() => { });
   }, []);
 
-  // Pré-carrega imagens/bitmaps
   useEffect(() => {
     (async () => {
       try {
@@ -51,7 +52,6 @@ export default function RootLayout() {
     })();
   }, []);
 
-  // Esconde splash quando tudo está pronto
   useEffect(() => {
     if (assetsReady && fontsLoaded) {
       SplashScreen.hideAsync().catch(() => { });
@@ -61,18 +61,14 @@ export default function RootLayout() {
   if (!assetsReady || !fontsLoaded) return null;
 
   return (
-    <>
+    <AuthProvider>
       <StatusBar style="light" />
-      return (
       <Stack screenOptions={{ headerShown: false }}>
-        {/* index da raiz decide para onde mandar */}
         <Stack.Screen name="index" />
-        {/* pasta do onboarding */}
         <Stack.Screen name="onboarding/index" />
-        {/* grupo de tabs (já deve ter seu próprio _layout dentro de (tabs) */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       </Stack>
-      )
-    </>
+    </AuthProvider>
   );
 }
