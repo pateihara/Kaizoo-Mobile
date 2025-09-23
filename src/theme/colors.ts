@@ -1,4 +1,4 @@
-// src/theme/index.ts
+// src/theme/colors.ts
 export const colors = {
     // Paleta do design
     mascots: {
@@ -38,21 +38,6 @@ export const colors = {
     white: "#FFFFFF",
 };
 
-export const spacing = {
-    xs: 8,
-    sm: 12,
-    md: 16,
-    lg: 24,
-    xl: 32,
-} as const;
-
-export const radii = {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 24,
-    pill: 999,
-} as const;
 
 export const fonts = {
     family: {

@@ -1,5 +1,4 @@
 // app/onboarding/index.tsx
-
 import { colors, radius, spacing } from "@/theme";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -14,14 +13,14 @@ import {
     Text,
     View,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 type Slide = {
     key: string;
     title: string;
     description: string;
-    // troque pelo seu require/import
     image?: any;
 };
 
@@ -31,43 +30,43 @@ const SLIDES: Slide[] = [
         title: "SEU KAIZOO",
         description:
             "Você irá criar e personalizar seu Kaizoo, que vai te acompanhar na sua jornada de exercícios físicos.",
-        // image: require("@/assets/onboarding/kaizoo.png"),
+        image: require("assets/images/TatoListingBack.png"),
     },
     {
         key: "desafios",
         title: "DESAFIOS DIÁRIOS",
         description:
             "Metodologia Kaizen: um pouquinho a cada dia para grandes conquistas!",
-        // image: require("@/assets/onboarding/checklist.png"),
+        image: require("assets/images/exemploDesafios.png"),
     },
     {
         key: "gamificacao",
         title: "GAMIFICAÇÃO LEVE",
         description:
             "Cada pequena conquista vira celebração. Evolua com diversão e sem pressão.",
-        // image: require("@/assets/onboarding/xp.png"),
+        image: require("assets/images/xpStar.png"),
     },
     {
         key: "comunidade",
         title: "COMUNIDADE ACOLHEDORA",
         description:
             "Espaço seguro e motivador onde cada conquista é celebrada e cada passo é incentivado.",
-        // image: require("@/assets/onboarding/community.png"),
+        image: require("assets/images/allTogether.png"),
     },
 ];
 
 export default function OnboardingScreen() {
     const router = useRouter();
     const listRef = useRef<FlatList<Slide>>(null);
+    const insets = useSafeAreaInsets();
 
-    // controla “splash de 2s” antes dos cards
+    // splash de 2s
     const [showSplash, setShowSplash] = useState(true);
     useEffect(() => {
         const t = setTimeout(() => setShowSplash(false), 2000);
         return () => clearTimeout(t);
     }, []);
 
-    // índice do carrossel
     const [index, setIndex] = useState(0);
 
     const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -85,23 +84,40 @@ export default function OnboardingScreen() {
     const skipOrFinish = async () => {
         router.replace("/(auth)/register");
     };
+
     if (showSplash) {
         return (
-            <View style={[styles.screen, { justifyContent: "center", alignItems: "center", backgroundColor: "black" }]}>
-                {/* Troque por sua arte de abertura */}
-                {/* <Image source={require("@/assets/onboarding/mascots.png")} style={{ width: 260, height: 260, marginBottom: spacing.lg }} /> */}
-                <Text style={styles.splashTitle}>Mexa-se.{"\n"}Evolua.{"\n"}Divirta-se!</Text>
-            </View>
+            <SafeAreaView edges={["top", "bottom"]} style={styles.screen}>
+                <View style={styles.splashContainer}>
+                    <Image
+                        source={require("assets/images/allTogether.png")}
+                        style={styles.splashImage}
+                        resizeMode="contain"
+                    />
+                    <Text style={styles.splashTitle}>
+                        Mexa-se<Text style={{ color: "yellow" }}>.</Text>{"\n"}
+                        Evolua<Text style={{ color: "yellow" }}>.</Text>{"\n"}
+                        Divirta-se<Text style={{ color: "yellow" }}>!</Text>
+                    </Text>
+                </View>
+            </SafeAreaView>
         );
     }
 
     return (
-        <View style={styles.screen}>
+        <SafeAreaView edges={["top", "bottom"]} style={styles.screen}>
             <FlatList
                 ref={listRef}
                 data={SLIDES}
                 keyExtractor={(s) => s.key}
-                renderItem={({ item }) => <SlideCard slide={item} />}
+                renderItem={({ item, index: i }) => (
+                    <SlideCard
+                        slide={item}
+                        isLast={i === SLIDES.length - 1}
+                        onNext={next}
+                        onSkip={skipOrFinish}
+                    />
+                )}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 pagingEnabled
@@ -109,47 +125,48 @@ export default function OnboardingScreen() {
                 onMomentumScrollEnd={onMomentumEnd}
             />
 
-            {/* dots */}
-            <View style={styles.dots}>
+            {/* Dots acima dos botões, respeitando a barra do Android */}
+            <View style={[styles.dots, { bottom: insets.bottom + 96 }]}>
                 {SLIDES.map((_, i) => (
-                    <View
-                        key={i}
-                        style={[
-                            styles.dot,
-                            i === index && styles.dotActive,
-                        ]}
-                    />
+                    <View key={i} style={[styles.dot, i === index && styles.dotActive]} />
                 ))}
             </View>
-
-            {/* CTA inferior */}
-            <View style={styles.ctaWrapper}>
-                <Pressable style={styles.cta} onPress={index === SLIDES.length - 1 ? skipOrFinish : next}>
-                    <Text style={styles.ctaText}>
-                        {index === SLIDES.length - 1 ? "criar minha conta" : "continuar"}
-                    </Text>
-                </Pressable>
-
-                {/* botão pular opcional */}
-                {index < SLIDES.length - 1 && (
-                    <Pressable onPress={skipOrFinish} style={{ padding: spacing.md }}>
-                        <Text style={{ color: colors.gray[500] }}>pular</Text>
-                    </Pressable>
-                )}
-            </View>
-        </View>
+        </SafeAreaView>
     );
 }
 
-function SlideCard({ slide }: { slide: Slide }) {
+function SlideCard({
+    slide,
+    isLast,
+    onNext,
+    onSkip,
+}: {
+    slide: Slide;
+    isLast: boolean;
+    onNext: () => void;
+    onSkip: () => void;
+}) {
     return (
-        <View style={{ width, paddingHorizontal: spacing.lg, paddingTop: spacing.xl }}>
+        <View
+            style={{
+                width,
+                height, // ocupa a altura toda para centralizar verticalmente
+                paddingHorizontal: spacing.lg,
+                justifyContent: "center",
+                alignItems: "center",
+            }}
+        >
             <View style={styles.card}>
                 {/* IMAGEM */}
                 {slide.image ? (
                     <Image source={slide.image} style={styles.cardImage} resizeMode="contain" />
                 ) : (
-                    <View style={[styles.cardImage, { alignItems: "center", justifyContent: "center" }]}>
+                    <View
+                        style={[
+                            styles.cardImage,
+                            { alignItems: "center", justifyContent: "center" },
+                        ]}
+                    >
                         <Text style={{ color: colors.gray[400] }}>(adicione a ilustração aqui)</Text>
                     </View>
                 )}
@@ -159,6 +176,25 @@ function SlideCard({ slide }: { slide: Slide }) {
 
                 {/* DESCRIÇÃO */}
                 <Text style={styles.cardDesc}>{slide.description}</Text>
+
+                {/* CTA DENTRO DO SLIDE (viaja com o card) */}
+                <View style={{ marginTop: spacing.xl, alignItems: "center" }}>
+                    <Pressable
+                        style={styles.cta}
+                        onPress={isLast ? onSkip : onNext}
+                        hitSlop={8}
+                    >
+                        <Text style={styles.ctaText}>
+                            {isLast ? "criar minha conta" : "continuar"}
+                        </Text>
+                    </Pressable>
+
+                    {!isLast && (
+                        <Pressable onPress={onSkip} style={{ padding: spacing.md }} hitSlop={8}>
+                            <Text style={{ color: colors.gray[500] }}>pular</Text>
+                        </Pressable>
+                    )}
+                </View>
             </View>
         </View>
     );
@@ -169,6 +205,22 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: "black",
     },
+
+    // Splash
+    splashContainer: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "black",
+        paddingHorizontal: spacing.lg,
+    },
+    splashImage: {
+        width: width * 0.6,
+        height: undefined,
+        aspectRatio: 1,
+        marginBottom: spacing.lg,
+        alignSelf: "center",
+    },
     splashTitle: {
         textAlign: "center",
         color: "white",
@@ -177,12 +229,16 @@ const styles = StyleSheet.create({
         fontWeight: "800",
     },
 
+    // Card
     card: {
         backgroundColor: "white",
         borderRadius: radius.lg ?? 16,
-        padding: spacing.lg,
-        paddingTop: spacing.xl,
+        paddingVertical: spacing.xl,
+        paddingHorizontal: spacing.lg,
+        width: "100%",
+        maxWidth: 420,
         minHeight: 520,
+        alignSelf: "center",
         // sombra leve
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 8 },
@@ -191,7 +247,9 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     cardImage: {
-        height: 180,
+        width: "100%",
+        height: 200,
+        alignSelf: "center",
         marginBottom: spacing.lg,
     },
     cardTitle: {
@@ -209,9 +267,9 @@ const styles = StyleSheet.create({
         color: colors.gray?.[600] ?? "#555",
     },
 
+    // Dots
     dots: {
         position: "absolute",
-        bottom: 112,
         left: 0,
         right: 0,
         flexDirection: "row",
@@ -229,24 +287,17 @@ const styles = StyleSheet.create({
         width: 16,
     },
 
-    ctaWrapper: {
-        position: "absolute",
-        left: spacing.lg,
-        right: spacing.lg,
-        bottom: spacing.lg,
-        alignItems: "center",
-        gap: spacing.xs,
-    },
+    // CTA (usado dentro do card)
     cta: {
         width: "100%",
         height: 48,
         borderRadius: 999,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "white",
+        backgroundColor: "black",
     },
     ctaText: {
-        color: "black",
+        color: "white",
         fontWeight: "800",
         fontSize: 16,
         textTransform: "lowercase",

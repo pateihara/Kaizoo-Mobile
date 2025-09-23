@@ -1,4 +1,3 @@
-// app/(auth)/login.tsx
 import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,6 +6,7 @@ import { useNavigation, useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
     Alert,
+    Image,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -14,21 +14,21 @@ import {
     StyleSheet,
     TextInput,
     TouchableWithoutFeedback,
-    View,
+    View
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function LoginScreen() {
     const router = useRouter();
-    const navigation = useNavigation(); // ← peguei o navigation p/ back seguro
+    const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
 
     const [email, setEmail] = useState("");
     const [pass, setPass] = useState("");
     const [loading, setLoading] = useState(false);
     const passRef = useRef<TextInput>(null);
 
-    // back seguro: se não tiver quem "voltar", manda pro onboarding (rota pública)
     const safeBack = () => {
-        // @ts-ignore - alguns tipos não expõem canGoBack
         if (navigation?.canGoBack?.()) navigation.goBack();
         else router.replace("/onboarding");
     };
@@ -38,7 +38,7 @@ export default function LoginScreen() {
     const onLogin = async () => {
         setLoading(true);
         try {
-            await login(email.trim(), pass);   // salva tokens e seta user no contexto
+            await login(email.trim(), pass);
             router.replace("/");
         } catch (e: any) {
             Alert.alert("Erro ao entrar", e.message ?? String(e));
@@ -48,89 +48,135 @@ export default function LoginScreen() {
     };
 
     return (
-        <KeyboardAvoidingView
-            style={styles.screen}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={0}
-        >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                <ScrollView
-                    contentContainerStyle={styles.content}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
-                >
-                    <Text variant="title" weight="bold" style={styles.title}>
-                        Bem vindo de volta!
-                    </Text>
+        <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
+            <KeyboardAvoidingView
+                style={styles.flex}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={0}
+            >
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                    <View style={styles.container}>
+                        <ScrollView
+                            style={styles.scroll}
+                            contentContainerStyle={styles.content}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
+                        >
+                            <Image
+                                source={require("assets/images/allTogether.png")}
+                                resizeMode="contain"
+                            />
 
-                    <TextInput
-                        placeholder="e-mail"
-                        placeholderTextColor="#6B6B6B"
-                        value={email}
-                        onChangeText={setEmail}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        keyboardType="email-address"
-                        textContentType="emailAddress"
-                        autoComplete="email"
-                        returnKeyType="next"
-                        blurOnSubmit={false}
-                        onSubmitEditing={() => passRef.current?.focus()}
-                        style={styles.input}
-                    />
+                            <View style={styles.headerBlock}>
+                                <Text variant="title" weight="bold" style={styles.title}>
+                                    Bem vindo de volta!
+                                </Text>
+                            </View>
 
-                    <TextInput
-                        ref={passRef}
-                        placeholder="senha"
-                        placeholderTextColor="#6B6B6B"
-                        value={pass}
-                        onChangeText={setPass}
-                        secureTextEntry
-                        textContentType="password"
-                        autoComplete="password"
-                        returnKeyType="done"
-                        onSubmitEditing={onLogin}
-                        style={styles.input}
-                    />
+                            <View style={styles.formBlock}>
+                                <TextInput
+                                    placeholder="e-mail"
+                                    placeholderTextColor="#6B6B6B"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    keyboardType="email-address"
+                                    textContentType="emailAddress"
+                                    autoComplete="email"
+                                    returnKeyType="next"
+                                    blurOnSubmit={false}
+                                    onSubmitEditing={() => passRef.current?.focus()}
+                                    style={styles.input}
+                                />
 
-                    <View style={{ height: 24 }} />
+                                <TextInput
+                                    ref={passRef}
+                                    placeholder="senha"
+                                    placeholderTextColor="#6B6B6B"
+                                    value={pass}
+                                    onChangeText={setPass}
+                                    secureTextEntry
+                                    textContentType="password"
+                                    autoComplete="password"
+                                    returnKeyType="done"
+                                    onSubmitEditing={onLogin}
+                                    style={styles.input}
+                                />
+                            </View>
 
-                    <Button label="Entrar" onPress={onLogin} fullWidth loading={loading} />
-                    <View style={{ height: spacing.sm }} />
-                    <Button
-                        variant="ghost"
-                        onPress={() => router.push("/(auth)/register")} // ← caminho correto no grupo (auth)
-                        fullWidth
-                        label="Criar Conta"
-                    />
-                    <View style={{ height: spacing.xs }} />
-                    <Button
-                        variant="secondary"
-                        onPress={safeBack} // ← usa back seguro
-                        fullWidth
-                        label="voltar"
-                    />
-                </ScrollView>
-            </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+                            <View style={{ height: spacing.xl * 2 }} />
+                        </ScrollView>
+
+                        <View style={[styles.footerFixed, { paddingBottom: insets.bottom + spacing.md }]}>
+                            <Button
+                                variant="onboardingFilled"
+                                label="Entrar"
+                                onPress={onLogin}
+                                fullWidth
+                                loading={loading}
+                                accessibilityRole="button"
+                                accessibilityLabel="Entrar"
+                            />
+                            <View style={{ height: spacing.sm }} />
+                            <Button
+                                variant="onboardingOutline"
+                                onPress={() => router.push("/(auth)/register")}
+                                fullWidth
+                                label="Criar Conta"
+                                accessibilityRole="button"
+                                accessibilityLabel="Criar conta"
+                            />
+                            <View style={{ height: spacing.xs }} />
+
+                        </View>
+                    </View>
+                </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
+    flex: { flex: 1 },
     screen: { flex: 1, backgroundColor: "black" },
+    container: { flex: 1 },
+
+    scroll: { flex: 1 },
     content: {
-        flexGrow: 1,
-        padding: spacing.lg,
+        paddingHorizontal: spacing.lg,
         paddingTop: spacing.xl,
         gap: spacing.md,
-        justifyContent: "flex-end",
+        alignItems: "center",
     },
+
+    headerBlock: {
+        width: "100%",
+        alignItems: "center",
+    },
+
+    formBlock: {
+        width: "100%",
+        gap: spacing.sm,
+    },
+
+    footerFixed: {
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        paddingHorizontal: spacing.lg,
+        backgroundColor: "black",
+    },
+
     title: { color: "white", textAlign: "center", marginBottom: spacing.md },
+
     input: {
         height: 56,
         borderRadius: 28,
         paddingHorizontal: spacing.lg,
         backgroundColor: colors.gray?.[200] ?? "#EDEDED",
         color: "#111",
+        alignSelf: "stretch",
     },
 });

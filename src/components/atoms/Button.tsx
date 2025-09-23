@@ -1,16 +1,24 @@
+//src/components/Button.tsx
 import Text from "@/components/atoms/Text";
 import { colors, radius, spacing } from "@/theme";
 import React from "react";
-import { ActivityIndicator, Pressable, ViewStyle } from "react-native";
+import {
+    ActivityIndicator,
+    Pressable,
+    PressableProps,
+    StyleProp,
+    ViewStyle,
+} from "react-native";
 
-type Variant = "primary" | "secondary" | "ghost";
+type Variant = "primary" | "secondary" | "ghost" | "outline" | "onboardingFilled" | "onboardingOutline";
 
-export type ButtonProps = {
-    onPress?: () => void;
+export interface ButtonProps
+    extends Omit<PressableProps, "style" | "children" | "onPress"> {
+    onPress?: () => void | Promise<void>;
     variant?: Variant;
     disabled?: boolean;
     loading?: boolean;
-    style?: ViewStyle | ViewStyle[];
+    style?: StyleProp<ViewStyle>;
     /** Texto do botão (API nova) */
     label?: string;
     /** Alias p/ compatibilidade com usos antigos */
@@ -19,11 +27,11 @@ export type ButtonProps = {
     children?: React.ReactNode;
     /** Ocupa 100% da largura disponível */
     fullWidth?: boolean;
+    /** Se não passar, cai no label/title */
     accessibilityLabel?: string;
-};
+}
 
 function getVariantStyles(variant: Variant, disabled?: boolean) {
-    // seu tema: colors.brand.{primary, primaryDark, accent} e colors.gray[…]
     const brandBg = colors.brand.primary;
     const brandDisabled = colors.gray[300];
     const brandText = colors.ui.inverse;
@@ -44,6 +52,22 @@ function getVariantStyles(variant: Variant, disabled?: boolean) {
         };
     }
 
+    if (variant === "onboardingOutline") {
+        return {
+            backgroundColor: "transparent",
+            textColor: colors.mascots.paleTurquoise,
+            borderColor: colors.mascots.paleTurquoise,
+        };
+    }
+
+    if (variant === "onboardingFilled") {
+        return {
+            backgroundColor: colors.mascots.paleTurquoise,
+            textColor: colors.black,
+            borderColor: "transparent",
+        };
+    }
+
     // primary
     return {
         backgroundColor: disabled ? brandDisabled : brandBg,
@@ -59,34 +83,39 @@ export default function Button({
     loading,
     style,
     label,
-    title,     // <- compat
+    title, // compat
     children,
-    fullWidth, // <- novo
+    fullWidth,
     accessibilityLabel,
+    ...rest // <- pega todas as props do Pressable (inclui accessibilityRole, accessibilityHint, testID etc.)
 }: ButtonProps) {
     const vs = getVariantStyles(variant, disabled);
-    const text = label ?? title; // mantém compatibilidade
+    const text = label ?? title;
 
     return (
         <Pressable
-            accessibilityRole="button"
+            {...rest}
+            // se não passar, vira "button" por padrão
+            accessibilityRole={rest.accessibilityRole ?? "button"}
             accessibilityLabel={accessibilityLabel ?? text}
             onPress={disabled || loading ? undefined : onPress}
             style={[
                 {
-                    height: 44,
+                    minHeight: 48, // acessibilidade (área de toque)
+                    paddingVertical: 10,
                     width: fullWidth ? "100%" : undefined,
                     borderRadius: radius.md,
                     paddingHorizontal: spacing.md,
                     alignItems: "center",
                     justifyContent: "center",
                     backgroundColor: vs.backgroundColor as string,
-                    borderWidth: vs.borderColor === "transparent" ? 0 : 1,
+                    borderWidth: (vs.borderColor as string) === "transparent" ? 0 : 1,
                     borderColor: vs.borderColor as string,
                     opacity: disabled ? 0.6 : 1,
                 },
                 style,
             ]}
+            hitSlop={rest.hitSlop ?? { top: 6, bottom: 6, left: 6, right: 6 }}
         >
             {loading ? (
                 <ActivityIndicator color={vs.textColor as string} />
