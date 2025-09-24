@@ -1,149 +1,241 @@
 // app/kaizoo/form.tsx
 import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
-import { useAuth } from "@/contexts/AuthContext"; // ✅ alias "@"
-import { finishOnboarding } from "@/services/profile";
-import { colors, radius, spacing } from "@/theme";
+import { radius, spacing } from "@/theme";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React from "react";
 import {
     Alert,
-    Animated,
-    Dimensions,
-    Easing,
-    FlatList,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
+    ScrollView,
     StyleSheet,
-    View
+    TouchableOpacity,
+    View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get("window");
+// --- Perguntas ---
+const Q1 = {
+    title: "Qual o seu objetivo principal com exercícios?",
+    key: "goal",
+    options: ["Perder peso", "Ganho de massa muscular", "Aumentar resistência"],
+} as const;
 
-type MascotKey = "tato" | "dino" | "koa" | "kaia" | "penny";
-type Mascot = {
-    key: MascotKey;
-    title: string;
-    subtitle: string;
-    frontImage?: any;
-    backImage?: any;
-    personality?: {
-        favorite?: string;
-        traits?: Array<{ label: string; score: number }>;
-        goals?: string[];
-    };
+const Q2 = {
+    title: "Com qual frequência se exercita atualmente?",
+    key: "freq",
+    options: ["Diariamente", "3–4 vezes por semana", "menos de 3 vezes por semana"],
+} as const;
+
+const Q3 = {
+    title: "Quais atividades você mais gosta?",
+    key: "likes",
+    options: ["Corrida / Caminhada", "Ciclismo", "Musculação", "Yoga / Alongamento"],
+} as const;
+
+type Answers = {
+    goal?: string;
+    freq?: string;
+    likes: string[]; // <- múltipla escolha
 };
 
-const MASCOTS: Mascot[] = [
-    { key: "tato", title: "TATO", subtitle: "TARTARUGA FOCADA" },
-    { key: "dino", title: "DINO", subtitle: "O DINOSSAURINHO FORTE" },
-    { key: "koa", title: "KOA", subtitle: "A COALINHA PROTETORA" },
-    { key: "kaia", title: "KAIA", subtitle: "A GATA ENERGÉTICA" },
-    { key: "penny", title: "PENNY", subtitle: "A PINGUIM SERENA" },
-];
-
-export default function SelectKaizoo() {
+export default function KaizooForm() {
     const router = useRouter();
-    const { refreshProfile } = useAuth();
-    const listRef = useRef<FlatList<Mascot>>(null);
-    const [index, setIndex] = useState(0);
-    const [saving, setSaving] = useState(false);
+    const [answers, setAnswers] = React.useState<Answers>({ likes: [] });
 
-    // flip (frente/verso)
-    const [isBack, setIsBack] = useState(false);
-    const flip = useRef(new Animated.Value(0)).current;
-    const frontRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["0deg", "180deg"] });
-    const backRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["180deg", "360deg"] });
-    const animateTo = (deg: number) =>
-        Animated.timing(flip, { toValue: deg, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true });
+    // radios (Q1, Q2)
+    const setAnswer = (k: "goal" | "freq", v: string) =>
+        setAnswers((a) => ({ ...a, [k]: v }));
 
-    const resetFlip = () => { setIsBack(false); flip.stopAnimation(); flip.setValue(0); };
-    const toggleFlip = () => { if (isBack) animateTo(0).start(() => setIsBack(false)); else animateTo(180).start(() => setIsBack(true)); };
+    // checkboxes (Q3)
+    const toggleLike = (opt: string) =>
+        setAnswers((a) => {
+            const exists = a.likes.includes(opt);
+            return { ...a, likes: exists ? a.likes.filter((x) => x !== opt) : [...a.likes, opt] };
+        });
 
-    const goNext = () => {
-        if (index < MASCOTS.length - 1) {
-            resetFlip();
-            listRef.current?.scrollToIndex({ index: index + 1, animated: true });
-            setIndex((i) => i + 1);
+    const validate = () => {
+        if (!answers.goal || !answers.freq || answers.likes.length === 0) {
+            Alert.alert("Falta responder", "Responda todas as perguntas (escolha ao menos uma atividade) para continuar.");
+            return false;
         }
-    };
-    const goPrev = () => {
-        if (index > 0) {
-            resetFlip();
-            listRef.current?.scrollToIndex({ index: index - 1, animated: true });
-            setIndex((i) => i - 1);
-        }
+        return true;
     };
 
-    const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-        const i = Math.round(e.nativeEvent.contentOffset.x / width);
-        if (i !== index) { setIndex(i); resetFlip(); }
-    };
+    const finalize = async () => {
+        if (!validate()) return;
 
-    const chooseThis = async () => {
-        if (saving) return;
-        setSaving(true);
-        const sel = MASCOTS[index];
-
-        // 1) Salva Kaizoo — SE falhar, avisa e não navega
         try {
-            await finishOnboarding(sel.key);
+            await AsyncStorage.setItem("onboarding:quiz", JSON.stringify(answers));
+            await AsyncStorage.setItem("profile:ready", "1");
+            router.replace("/kaizoo/success");
         } catch (e: any) {
-            const msg = e?.data?.error ?? e?.message ?? "Falha ao concluir onboarding";
-            Alert.alert("Não foi possível salvar seu Kaizoo", String(msg));
-            setSaving(false);
-            return;
+            Alert.alert("Não foi possível finalizar", String(e?.message ?? e));
         }
-
-        // 2) Atualiza perfil — SE falhar, só loga e segue
-        try {
-            await refreshProfile();
-        } catch (e: any) {
-            console.warn("refreshProfile falhou após salvar Kaizoo:", e?.message ?? e);
-        }
-
-        // 3) Vai pras tabs de qualquer forma (já salvou o Kaizoo no backend)
-        router.replace("/(tabs)");
-        setSaving(false);
     };
+
+    const goBack = () => router.replace("/kaizoo/select");
 
     return (
-        <View style={styles.screen}>
-            <Step title="1. Escolha seu Kaizoo" />
+        <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+            <ScrollView contentContainerStyle={{ paddingBottom: spacing.xl }} style={styles.container}>
+                {/* Etapa */}
+                <View style={{ padding: spacing.lg, paddingTop: spacing.xl }}>
+                    <View style={styles.stepPill}>
+                        <Text weight="bold">2. Breve Questionário</Text>
+                    </View>
+                </View>
 
-            {/* ...seu FlatList e UI permanecem iguais... */}
+                <View style={{ paddingHorizontal: spacing.lg }}>
+                    <View style={styles.card}>
+                        <Text variant="title" weight="bold" style={{ marginBottom: spacing.md }}>
+                            Me conte suas preferências
+                        </Text>
 
-            <View style={{ padding: spacing.lg, gap: spacing.sm }}>
-                <Button label="quero este!" onPress={chooseThis} fullWidth loading={saving} disabled={saving} />
-                {index < MASCOTS.length - 1 && (
-                    <Button variant="secondary" label="ver o próximo!" onPress={goNext} fullWidth disabled={saving} />
-                )}
-                {index > 0 && <Button variant="ghost" label="voltar" onPress={goPrev} fullWidth disabled={saving} />}
-            </View>
-        </View>
+                        <View style={styles.block}>
+                            <Text weight="bold" style={styles.blockTitle}>{Q1.title}</Text>
+                            <View style={{ gap: 14, marginTop: spacing.sm }}>
+                                {Q1.options.map((opt) => (
+                                    <RadioRow
+                                        key={opt}
+                                        label={opt}
+                                        selected={answers.goal === opt}
+                                        onPress={() => setAnswer("goal", opt)}
+                                    />
+                                ))}
+                            </View>
+                        </View>
+
+                        <View style={styles.block}>
+                            <Text weight="bold" style={styles.blockTitle}>{Q2.title}</Text>
+                            <View style={{ gap: 14, marginTop: spacing.sm }}>
+                                {Q2.options.map((opt) => (
+                                    <RadioRow
+                                        key={opt}
+                                        label={opt}
+                                        selected={answers.freq === opt}
+                                        onPress={() => setAnswer("freq", opt)}
+                                    />
+                                ))}
+                            </View>
+                        </View>
+
+                        <View style={styles.block}>
+                            <Text weight="bold" style={styles.blockTitle}>{Q3.title}</Text>
+                            <View style={{ gap: 14, marginTop: spacing.sm }}>
+                                {Q3.options.map((opt) => (
+                                    <CheckboxRow
+                                        key={opt}
+                                        label={opt}
+                                        checked={answers.likes.includes(opt)}
+                                        onPress={() => toggleLike(opt)}
+                                    />
+                                ))}
+                            </View>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Ações */}
+                <View style={{ padding: spacing.lg, gap: spacing.sm }}>
+                    <Button label="finalizar" variant="onboardingFilled" onPress={finalize} fullWidth />
+                    <Button label="voltar" variant="onboardingOutline" onPress={goBack} fullWidth />
+                </View>
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
-function Step({ title }: { title: string }) {
+function RadioRow({
+    label,
+    selected,
+    onPress,
+}: {
+    label: string;
+    selected?: boolean;
+    onPress?: () => void;
+}) {
     return (
-        <View style={{ padding: spacing.lg, paddingTop: spacing.xl }}>
-            <View style={styles.stepPill}>
-                <Text weight="bold" style={{ textAlign: "center" }}>{title}</Text>
+        <TouchableOpacity
+            onPress={onPress}
+            activeOpacity={0.8}
+            style={styles.radioRow}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: !!selected }}
+        >
+            <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
+                {selected ? <View style={styles.radioInner} /> : null}
             </View>
-        </View>
+            <Text style={styles.radioLabel}>{label}</Text>
+        </TouchableOpacity>
+    );
+}
+
+function CheckboxRow({
+    label,
+    checked,
+    onPress,
+}: {
+    label: string;
+    checked?: boolean;
+    onPress?: () => void;
+}) {
+    return (
+        <TouchableOpacity
+            onPress={onPress}
+            activeOpacity={0.8}
+            style={styles.checkboxRow}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: !!checked }}
+        >
+            <View style={[styles.checkboxBox, checked && styles.checkboxBoxActive]}>
+                {checked ? <View style={styles.checkboxTick} /> : null}
+            </View>
+            <Text style={styles.checkboxLabel}>{label}</Text>
+        </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
-    screen: { flex: 1, backgroundColor: "black" },
-    stepPill: { alignSelf: "center", backgroundColor: "white", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999 },
-    card: { backgroundColor: "white", borderRadius: radius.lg ?? 16, overflow: "hidden", minHeight: 560 },
-    cardTitleBand: { backgroundColor: "#222", paddingVertical: 12, paddingHorizontal: spacing.md },
-    face: { backfaceVisibility: "hidden", padding: spacing.lg },
-    back: { position: "absolute", top: 44, left: 0, right: 0, bottom: 0, padding: spacing.lg },
-    hero: { height: 420, borderRadius: radius.md ?? 12 },
-    badge: { alignSelf: "center", width: 120, height: 120, marginBottom: spacing.md },
-    heroPlaceholder: { backgroundColor: colors.gray?.[200] ?? "#eee", alignItems: "center", justifyContent: "center" },
-    personaTitle: { textAlign: "center", fontSize: 18, fontWeight: "800", marginTop: 4 },
-    personaSub: { textAlign: "center", opacity: 0.8, marginBottom: spacing.sm },
+    safe: { flex: 1, backgroundColor: "black" },
+    container: { flex: 1, backgroundColor: "black" },
+
+    stepPill: {
+        alignSelf: "center",
+        backgroundColor: "white",
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 999,
+    },
+
+    card: {
+        backgroundColor: "white",
+        borderRadius: radius.lg ?? 16,
+        padding: spacing.lg,
+    },
+
+    block: { marginTop: spacing.lg },
+    blockTitle: { fontSize: 16, lineHeight: 22 },
+
+    // Radio
+    radioRow: { flexDirection: "row", alignItems: "center", columnGap: 12 },
+    radioOuter: {
+        width: 26, height: 26, borderRadius: 26, borderWidth: 2, borderColor: "#2B2B2B",
+        alignItems: "center", justifyContent: "center",
+    },
+    radioOuterActive: { borderColor: "#86E3D2" },
+    radioInner: { width: 14, height: 14, borderRadius: 14, backgroundColor: "#86E3D2" },
+    radioLabel: { fontSize: 18, lineHeight: 24, color: "#111" },
+
+    // Checkbox
+    checkboxRow: { flexDirection: "row", alignItems: "center", columnGap: 12 },
+    checkboxBox: {
+        width: 26, height: 26, borderRadius: 8, borderWidth: 2, borderColor: "#2B2B2B",
+        alignItems: "center", justifyContent: "center",
+    },
+    checkboxBoxActive: { borderColor: "#86E3D2", backgroundColor: "#E9FBF7" },
+    checkboxTick: {
+        width: 14, height: 14, borderRadius: 3, backgroundColor: "#86E3D2",
+    },
+    checkboxLabel: { fontSize: 18, lineHeight: 24, color: "#111" },
 });

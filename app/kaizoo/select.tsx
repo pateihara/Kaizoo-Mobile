@@ -21,7 +21,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// — imagens (mantendo seu caminho “assets/...”). Atenção ao Kaia: K maiúsculo.
 import frontdino from "assets/images/card-dino.png";
 import frontkaia from "assets/images/card-kaia.png";
 import frontkoa from "assets/images/card-koa.png";
@@ -36,8 +35,11 @@ import backtato from "assets/images/StarTato.png";
 
 const { width } = Dimensions.get("window");
 
-// Rota para o form pós-escolha (ajuste se for diferente)
+// 👉 rota após escolher
 const NEXT_ROUTE = "/kaizoo/form";
+
+// 👉 altura fixa do card (a imagem cobre TUDO)
+const CARD_HEIGHT = 560 as const;
 
 type MascotKey = "tato" | "dino" | "koa" | "kaia" | "penny";
 type Mascot = {
@@ -53,7 +55,6 @@ type Mascot = {
     };
 };
 
-// paleta por mascote (bolinhas e checks)
 const ACCENT: Record<MascotKey, string> = {
     tato: "#F37997",
     dino: "#FFB24A",
@@ -61,9 +62,6 @@ const ACCENT: Record<MascotKey, string> = {
     kaia: "#7C8BFF",
     penny: "#7E7AF5",
 };
-
-// cor primária turquesa (botões principais)
-const TURQUOISE = "#3AB8A9";
 
 const MASCOTS: Mascot[] = [
     {
@@ -146,7 +144,7 @@ const MASCOTS: Mascot[] = [
                 { label: "Introspectiva", score: 5 },
                 { label: "Emocional", score: 4 },
             ],
-            goals: ["Reduzir estresse.", "Melhorar flexibilidade e o bem-estar emocional."],
+            goals: ["Reduzir estresse.", "Melhorar flexibilidade e bem-estar emocional."],
         },
     },
 ];
@@ -158,7 +156,7 @@ export default function SelectKaizoo() {
     const [index, setIndex] = useState(0);
     const [saving, setSaving] = useState(false);
 
-    // flip (frente/verso)
+    // flip
     const [isBack, setIsBack] = useState(false);
     const flip = useRef(new Animated.Value(0)).current;
     const frontRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["0deg", "180deg"] });
@@ -176,7 +174,6 @@ export default function SelectKaizoo() {
         else animateTo(180).start(() => setIsBack(true));
     };
 
-    // —— navegação: próximo volta ao primeiro
     const goNext = () => {
         const next = (index + 1) % MASCOTS.length;
         resetFlip();
@@ -184,19 +181,11 @@ export default function SelectKaizoo() {
         setIndex(next);
     };
 
-    // —— loop via swipe: ao parar no último, salta pro primeiro
     const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
         const i = Math.round(e.nativeEvent.contentOffset.x / width);
         if (i !== index) {
             setIndex(i);
             resetFlip();
-        }
-        if (i === MASCOTS.length - 1) {
-            // move para o primeiro discretamente (sem animação, evita flicker)
-            requestAnimationFrame(() => {
-                listRef.current?.scrollToIndex({ index: 0, animated: false });
-                setIndex(0);
-            });
         }
     };
 
@@ -225,7 +214,6 @@ export default function SelectKaizoo() {
             <View style={styles.container}>
                 <Step title="1. Escolha seu Kaizoo" />
 
-                {/* Cards */}
                 <View style={{ flex: 1 }}>
                     <FlatList
                         ref={listRef}
@@ -241,49 +229,31 @@ export default function SelectKaizoo() {
                         renderItem={({ item }) => (
                             <View style={{ width }}>
                                 <View style={styles.card}>
-                                    <View style={styles.cardTitleBand}>
-                                        <Text weight="bold" style={styles.cardTitle}>{item.title}</Text>
-                                        <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-                                    </View>
-
-                                    {/* Frente (ilustração cobre todo o fundo) */}
                                     <Animated.View
                                         style={[styles.faceFront, { transform: [{ perspective: 1000 }, { rotateY: frontRot }] }]}
                                         accessibilityLabel={`Imagem do mascote ${item.title}`}
                                     >
                                         {item.frontImage ? (
-                                            <Image
-                                                source={item.frontImage}
-                                                style={StyleSheet.absoluteFillObject}
-                                                resizeMode="cover"
-                                            />
+                                            <Image source={item.frontImage} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
                                         ) : (
                                             <View style={[StyleSheet.absoluteFillObject, styles.heroPlaceholder]} />
                                         )}
 
-                                        {/* botão sobreposto, mais pra cima, texto branco */}
+                                        <View style={styles.cardTitleBand}>
+                                            <Text weight="bold" style={styles.cardTitle}>{item.title}</Text>
+                                            <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+                                        </View>
+
                                         <View style={styles.overlayBtn}>
-                                            <Button
-                                                variant="primary"
-                                                label="Ver personalidade"
-                                                onPress={toggleFlip}
-                                                fullWidth
-                                            />
+                                            <Button variant="primary" label="Ver personalidade" onPress={toggleFlip} fullWidth />
                                         </View>
                                     </Animated.View>
 
-                                    {/* Verso (legível, estilo protótipo 2.png) */}
                                     <Animated.View
                                         style={[styles.faceBack, { transform: [{ perspective: 1000 }, { rotateY: backRot }] }]}
                                     >
-                                        {/* badge no topo */}
                                         {!!item.backImage && (
-                                            <Image
-                                                source={item.backImage}
-                                                style={styles.badge}
-                                                resizeMode="contain"
-                                                accessible={false}
-                                            />
+                                            <Image source={item.backImage} style={styles.badge} resizeMode="contain" accessible={false} />
                                         )}
 
                                         <ScrollView contentContainerStyle={{ paddingBottom: spacing.lg }}>
@@ -339,7 +309,6 @@ export default function SelectKaizoo() {
                     />
                 </View>
 
-                {/* Rodapé: só dois botões */}
                 <View style={styles.actions}>
                     <Button
                         variant="onboardingFilled"
@@ -372,22 +341,13 @@ function Step({ title }: { title: string }) {
     );
 }
 
-// —— auxiliares
 function ScoreDots({ score = 0, color = "#888" }: { score?: number; color?: string }) {
     const total = 5;
     return (
         <View style={{ flexDirection: "row", columnGap: 8 }}>
             {Array.from({ length: total }).map((_, i) => {
                 const filled = i < score;
-                return (
-                    <View
-                        key={i}
-                        style={[
-                            styles.dot,
-                            { opacity: filled ? 1 : 0.2, backgroundColor: color },
-                        ]}
-                    />
-                );
+                return <View key={i} style={[styles.dot, { opacity: filled ? 1 : 0.2, backgroundColor: color }]} />;
             })}
         </View>
     );
@@ -411,40 +371,40 @@ const styles = StyleSheet.create({
         backgroundColor: "white",
         borderRadius: radius.lg ?? 16,
         overflow: "hidden",
-        minHeight: 560,
         marginHorizontal: spacing.lg,
+        height: CARD_HEIGHT,
+        position: "relative",
     },
-    cardTitleBand: { backgroundColor: "#222", paddingVertical: 12, paddingHorizontal: spacing.md },
+
+    faceFront: {
+        ...StyleSheet.absoluteFillObject,
+        backfaceVisibility: "hidden",
+    },
+    faceBack: {
+        ...StyleSheet.absoluteFillObject,
+        backfaceVisibility: "hidden",
+        backgroundColor: "white",
+        padding: spacing.lg,
+        paddingTop: 60,
+    },
+
+    cardTitleBand: {
+        backgroundColor: "#222",
+        paddingVertical: 12,
+        paddingHorizontal: spacing.md,
+    },
     cardTitle: { color: "white", fontSize: 22, textAlign: "center" },
     cardSubtitle: { color: "white", opacity: 0.9, textAlign: "center" },
 
-    // frente: sem padding pra a imagem preencher; conteúdo posicionado via absolute
-    faceFront: { backfaceVisibility: "hidden", minHeight: 480, position: "relative" },
-    // verso
-    faceBack: {
-        backfaceVisibility: "hidden",
-        position: "absolute",
-        top: 44,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        padding: spacing.lg,
-    },
-
     heroPlaceholder: { backgroundColor: colors.gray?.[200] ?? "#eee" },
 
-    // botão “Ver personalidade” sobre o fundo
     overlayBtn: {
         position: "absolute",
-        bottom: spacing.xl, // sobe o botão
+        bottom: spacing.xl,
         left: spacing.lg,
         right: spacing.lg,
     },
-    personalityBtn: {
-        backgroundColor: "#000", // fundo preto garantido
-    },
 
-    // verso — estilo protótipo 2.png
     badge: { alignSelf: "center", width: 140, height: 140, marginBottom: spacing.md },
     sectionTitle: { fontSize: 16, marginBottom: 6 },
     sectionBody: { fontSize: 16 },
