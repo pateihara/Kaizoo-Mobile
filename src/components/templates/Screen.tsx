@@ -1,3 +1,4 @@
+//src/components/templates/Screen.tsx
 import { colors, spacing } from "@/theme";
 import { ReactNode } from "react";
 import { ScrollView, View } from "react-native";

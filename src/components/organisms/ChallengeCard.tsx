@@ -1,3 +1,4 @@
+// //src/components/organisms/ChallengeCard.tsx
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import ProgressBar from "@/components/molecules/ProgressBar";

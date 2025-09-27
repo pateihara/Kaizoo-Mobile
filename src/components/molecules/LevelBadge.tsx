@@ -1,4 +1,4 @@
-// LevelBadge.tsx
+//src/components/molecules/LevelBadge.tsx
 import Text from "@/components/atoms/Text";
 import { colors, radius, spacing } from "@/theme";
 import { useEffect, useRef } from "react";

@@ -1,3 +1,4 @@
+// //src/components/organisms/MascotCard.tsx
 import Button from "@/components/atoms/Button";
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";

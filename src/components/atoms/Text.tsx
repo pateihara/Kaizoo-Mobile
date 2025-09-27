@@ -1,3 +1,4 @@
+//src/components/atoms/Text.tsx
 import { colors } from "@/theme";
 import React from "react";
 import {

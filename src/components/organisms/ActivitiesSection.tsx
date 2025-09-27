@@ -1,4 +1,4 @@
-// ActivitiesSection.tsx
+// //src/components/organisms/ActivitiesSection.tsx
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import ActivityChip from "@/components/molecules/ActivityChip";
