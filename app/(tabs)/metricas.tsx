@@ -1,5 +1,5 @@
+//app/(tabs)/metricas.tsx
 import Text from "@/components/atoms/Text";
-import ChallengesList from "@/components/organisms/ChallengesList";
 import GoalsList from "@/components/organisms/GoalsList";
 import MetricsGrid from "@/components/organisms/MetricsGrid";
 import RecordsList from "@/components/organisms/RecordsList";
@@ -18,7 +18,6 @@ export default function MetricasPage() {
             <MetricsGrid />
             <GoalsList />
             <RecordsList />
-            <ChallengesList />
 
             <View style={{ height: spacing.lg }} />
         </Screen>

@@ -1,8 +1,9 @@
-//app/(auth)/register.tsx
+// app/(auth)/register.tsx
 import Button from "@/components/atoms/Button";
+import Input from "@/components/atoms/Input";
 import Text from "@/components/atoms/Text";
 import { useAuth } from "@/contexts/AuthContext";
-import { colors, spacing } from "@/theme";
+import { spacing } from "@/theme";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -32,7 +33,6 @@ export default function RegisterScreen() {
 
     const { register } = useAuth();
 
-    // 👇 estado do teclado
     const [kbOpen, setKbOpen] = useState(false);
     useEffect(() => {
         const sh = Keyboard.addListener("keyboardDidShow", () => setKbOpen(true));
@@ -73,7 +73,7 @@ export default function RegisterScreen() {
                             contentContainerStyle={[
                                 styles.content,
                                 {
-                                    paddingTop: kbOpen ? spacing.sm : spacing.xl, // 👈 reduz no teclado
+                                    paddingTop: kbOpen ? spacing.sm : spacing.xl,
                                     minHeight: "100%",
                                 },
                             ]}
@@ -82,7 +82,6 @@ export default function RegisterScreen() {
                             showsVerticalScrollIndicator={false}
                             automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
                         >
-                            {/* Header some quando teclado abre */}
                             {!kbOpen && (
                                 <View style={styles.headerBlock}>
                                     <Image
@@ -97,9 +96,8 @@ export default function RegisterScreen() {
                             )}
 
                             <View style={styles.formBlock}>
-                                <TextInput
+                                <Input
                                     placeholder="e-mail"
-                                    placeholderTextColor="#6B6B6B"
                                     value={email}
                                     onChangeText={setEmail}
                                     autoCapitalize="none"
@@ -110,13 +108,11 @@ export default function RegisterScreen() {
                                     returnKeyType="next"
                                     blurOnSubmit={false}
                                     onSubmitEditing={() => passRef.current?.focus()}
-                                    style={styles.input}
                                 />
 
-                                <TextInput
+                                <Input
                                     ref={passRef}
                                     placeholder="senha"
-                                    placeholderTextColor="#6B6B6B"
                                     value={pass}
                                     onChangeText={setPass}
                                     secureTextEntry
@@ -125,13 +121,11 @@ export default function RegisterScreen() {
                                     returnKeyType="next"
                                     blurOnSubmit={false}
                                     onSubmitEditing={() => confirmRef.current?.focus()}
-                                    style={styles.input}
                                 />
 
-                                <TextInput
+                                <Input
                                     ref={confirmRef}
                                     placeholder="confirmar senha"
-                                    placeholderTextColor="#6B6B6B"
                                     value={pass2}
                                     onChangeText={setPass2}
                                     secureTextEntry
@@ -139,15 +133,12 @@ export default function RegisterScreen() {
                                     autoComplete="password-new"
                                     returnKeyType="done"
                                     onSubmitEditing={onCreate}
-                                    style={styles.input}
                                 />
                             </View>
 
-                            {/* folga pra não colar no footer */}
                             <View style={{ height: spacing.lg }} />
                         </ScrollView>
 
-                        {/* Footer fora do ScrollView (não absoluto) */}
                         <SafeAreaView edges={["bottom"]} style={styles.footer}>
                             <Button
                                 label="Criar Conta"
@@ -207,13 +198,4 @@ const styles = StyleSheet.create({
     },
 
     title: { color: "white", textAlign: "center", marginBottom: spacing.md },
-
-    input: {
-        height: 56,
-        borderRadius: 28,
-        paddingHorizontal: spacing.lg,
-        backgroundColor: colors.gray?.[200] ?? "#EDEDED",
-        color: "#111",
-        alignSelf: "stretch",
-    },
 });
