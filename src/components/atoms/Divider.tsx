@@ -1,3 +1,4 @@
+//// @/components/atoms/Divider.tsx
 import { colors, spacing } from "@/theme";
 import { View } from "react-native";
 

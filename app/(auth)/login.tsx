@@ -31,7 +31,7 @@ export default function LoginScreen() {
     const passRef = useRef<TextInput>(null);
 
     const safeBack = () => {
-        if (navigation?.canGoBack?.()) navigation.goBack();
+        if ("canGoBack" in navigation && navigation.canGoBack()) navigation.goBack();
         else router.replace("/onboarding");
     };
 
@@ -43,7 +43,7 @@ export default function LoginScreen() {
             await login(email.trim(), pass);
             router.replace("/");
         } catch (e: any) {
-            Alert.alert("Erro ao entrar", e.message ?? String(e));
+            Alert.alert("Erro ao entrar", e?.message ?? String(e));
         } finally {
             setLoading(false);
         }

@@ -3,26 +3,45 @@ import Button from "@/components/atoms/Button";
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import Screen from "@/components/templates/Screen";
-import type {
-    ActivityKey,
-    ChallengeBase,
-    ChallengeExt as ChallengeExtStore,
-    Intensity,
-} from "@/contexts/ActivityContext";
 import {
     estimateCaloriesFor,
-    useActivityStore,
+    useActivitySelector,
+    type ChallengeExt as ChallengeExtStore,
 } from "@/contexts/ActivityContext";
-import { colors, spacing } from "@/theme";
-import React, { useMemo, useState } from "react";
-import { View } from "react-native";
 
-type CommunityEvent = ChallengeBase & {
-    date: string;
-    location: string;
+import { useAuth } from "@/contexts/AuthContext";
+import { bus } from "@/lib/bus";
+import { createActivity, type ActivityPayload } from "@/services/activities";
+import type { ActivityKey, Intensity } from "@/services/challenges";
+import {
+    activateAvailableChallenge,
+    completeChallengeServer,
+    joinChallengeEvent,
+    listAvailableChallenges,
+    listChallenges,
+    listCommunityEvents,
+    type Challenge as ChallengeAPI,
+    type CommunityEvent,
+} from "@/services/challenges";
+import { colors, spacing } from "@/theme";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, View } from "react-native";
+
+/* --------- mocks com MÉTRICAS definidas ---------- */
+type ChallengeBase = {
+    id: string;
+    title: string;
+    description?: string;
+    rewardXP: number;
+    durationDays?: number;
+    expiresInDays?: number;
+    metricType?: ActivityKey;
+    metricDurationMin?: number;
+    metricDistanceKm?: number;
+    metricIntensity?: Intensity;
+    metricCalories?: number;
 };
 
-// --------- mocks com MÉTRICAS definidas ----------
 const AVAILABLE_SOURCE: ChallengeBase[] = [
     {
         id: "v1",
@@ -32,7 +51,7 @@ const AVAILABLE_SOURCE: ChallengeBase[] = [
         durationDays: 7,
         metricType: "corrida",
         metricDistanceKm: 5,
-        metricDurationMin: 35,     // ~7 min/km
+        metricDurationMin: 35,
         metricIntensity: "high",
     },
     {
@@ -86,23 +105,113 @@ const EVENTS_SOURCE: CommunityEvent[] = [
 ];
 
 export default function DesafiosPage() {
-    const {
-        activeChallenges,
-        completedChallenges,
-        addAvailableChallengeToActive,
-        joinEventToActive,
-        completeChallenge,
-        addActivity,
-    } = useActivityStore();
+    // ===== Store (via selector real de Context) =====
+    const activeChallenges = useActivitySelector((s) => s.activeChallenges ?? []);
+    const completedChallenges = useActivitySelector((s) => s.completedChallenges ?? []);
 
+    const setActiveFromServer = useActivitySelector((s) => s.setActiveFromServer);
+    const addAvailableChallengeToActive = useActivitySelector((s) => s.addAvailableChallengeToActive);
+    const joinEventToActive = useActivitySelector((s) => s.joinEventToActive);
+    const completeFromServer = useActivitySelector((s) => s.completeFromServer);
+    const pushActivity = useActivitySelector((s) => s.pushActivity);
+
+    const { token } = useAuth() as { token?: string }; // se não usar, pode remover
+
+    // ===== Local state =====
     const [available, setAvailable] = useState<ChallengeBase[]>(AVAILABLE_SOURCE);
-    const [events] = useState<CommunityEvent[]>(EVENTS_SOURCE);
+    const [events, setEvents] = useState<CommunityEvent[]>(EVENTS_SOURCE);
+    const [loading, setLoading] = useState(true);
 
-    const activeIds = useMemo(() => new Set(activeChallenges.map(a => a.id)), [activeChallenges]);
+    const [joining, setJoining] = useState<Record<string, boolean>>({});
+    const [completing, setCompleting] = useState<Record<string, boolean>>({});
+    const [activating, setActivating] = useState<Record<string, boolean>>({});
+
+    // ===== Espelho local dos ativos (garante UI reativa mesmo sem store) =====
+    const [activeMirror, setActiveMirror] = useState<ChallengeExtStore[]>([]);
+
+    // Hidratação: mescla (não apaga quando vier vazio)
+    useEffect(() => {
+        if (Array.isArray(activeChallenges) && activeChallenges.length > 0) {
+            mergeIntoActiveMirror(activeChallenges as any);
+        }
+    }, [activeChallenges]);
+
+    // dedup dos ativos (no espelho)
+    const activeUnique = useMemo(() => {
+        const out: ChallengeExtStore[] = [];
+        const seen = new Set<string>();
+        const src = Array.isArray(activeMirror) ? activeMirror : [];
+        for (let i = 0; i < src.length; i++) {
+            const c = src[i];
+            if (!c || typeof c !== "object") continue;
+            const key = String((c as any).id ?? "");
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            out.push(c);
+        }
+        return out;
+    }, [activeMirror]);
+
+    const activeIds = useMemo(() => {
+        const set = new Set<string>();
+        const src = Array.isArray(activeUnique) ? activeUnique : [];
+        for (let i = 0; i < src.length; i++) {
+            const id = String(src[i]?.id ?? "");
+            if (id) set.add(id);
+        }
+        return set;
+    }, [activeUnique]);
+
+    // << chave para filtrar por fonte >>
+    const activeSourceIds = useMemo(() => {
+        const s = new Set<string>();
+        const src = Array.isArray(activeUnique) ? activeUnique : [];
+        for (let i = 0; i < src.length; i++) {
+            const sid = String(src[i]?.sourceId ?? src[i]?.id ?? "");
+            if (sid) s.add(sid);
+        }
+        return s;
+    }, [activeUnique]);
+
+    // ---------- API fetch com fallback ----------
+    useEffect(() => {
+        (async () => {
+            try {
+                const [availRes, eventsRes] = await Promise.allSettled([
+                    listAvailableChallenges(),
+                    listCommunityEvents(),
+                ]);
+
+                if (availRes.status === "fulfilled" && Array.isArray(availRes.value)) {
+                    const list = availRes.value as ChallengeAPI[];
+                    const filtered = list.filter((c) => !activeSourceIds.has(c.id));
+                    setAvailable(filtered as any);
+                } else {
+                    setAvailable(AVAILABLE_SOURCE.filter((c) => !activeSourceIds.has(c.id)));
+                }
+
+                if (eventsRes.status === "fulfilled" && Array.isArray(eventsRes.value)) {
+                    setEvents(eventsRes.value);
+                } else {
+                    setEvents(EVENTS_SOURCE);
+                }
+            } catch (e: any) {
+                console.log("[Desafios] erro ao carregar da API:", e?.message);
+                Alert.alert(
+                    "Aviso",
+                    "Não foi possível carregar desafios da comunidade agora. Mostrando conteúdo padrão."
+                );
+                setAvailable(AVAILABLE_SOURCE.filter((c) => !activeSourceIds.has(c.id)));
+                setEvents(EVENTS_SOURCE);
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, [activeSourceIds]);
 
     // ---------- helpers ----------
-    const guessType = (title: string, desc: string): ActivityKey => {
-        const t = (title + " " + desc).toLowerCase();
+    const guessType = (title: string, desc?: string): ActivityKey => {
+        const t = (title + " " + (desc ?? "")).toLowerCase();
         if (t.includes("corrid")) return "corrida";
         if (t.includes("caminh")) return "caminhada";
         if (t.includes("pedal") || t.includes("bike") || t.includes("cicl")) return "pedalada";
@@ -111,13 +220,15 @@ export default function DesafiosPage() {
         return "outro";
     };
 
-    const extractKm = (text: string): number | undefined => {
+    const extractKm = (text?: string): number | undefined => {
+        if (!text) return undefined;
         const m = text.toLowerCase().match(/(\d+(?:[.,]\d+)?)\s*km/);
         if (!m) return undefined;
         return parseFloat(m[1].replace(",", "."));
     };
 
-    const extractMinutes = (text: string): number | undefined => {
+    const extractMinutes = (text?: string): number | undefined => {
+        if (!text) return undefined;
         const t = text.toLowerCase();
         const m1 = t.match(/(\d+)\s*(?:min|minutos?)/);
         if (m1) return parseInt(m1[1], 10);
@@ -126,28 +237,42 @@ export default function DesafiosPage() {
         return undefined;
     };
 
-    const estimateDuration = (type: ActivityKey, distanceKm?: number, minutesHint?: number): number => {
+    const estimateDuration = (
+        type: ActivityKey,
+        distanceKm?: number,
+        minutesHint?: number
+    ): number => {
         if (typeof minutesHint === "number") return minutesHint;
         if (typeof distanceKm === "number") {
             switch (type) {
-                case "caminhada": return Math.round(distanceKm * 12);
-                case "corrida": return Math.round(distanceKm * 7);
-                case "pedalada": return Math.round(distanceKm * 3);
+                case "caminhada":
+                    return Math.round(distanceKm * 12);
+                case "corrida":
+                    return Math.round(distanceKm * 7);
+                case "pedalada":
+                    return Math.round(distanceKm * 3);
             }
         }
         switch (type) {
-            case "alongamento": return 15;
-            case "yoga": return 30;
-            default: return 30;
+            case "alongamento":
+                return 15;
+            case "yoga":
+                return 30;
+            default:
+                return 30;
         }
     };
 
     const defaultIntensity = (type: ActivityKey): Intensity => {
         switch (type) {
-            case "alongamento": return "low";
-            case "corrida": return "high";
-            case "yoga": return "medium";
-            default: return "medium";
+            case "alongamento":
+                return "low";
+            case "corrida":
+                return "high";
+            case "yoga":
+                return "medium";
+            default:
+                return "medium";
         }
     };
 
@@ -167,37 +292,241 @@ export default function DesafiosPage() {
 
     const caloriesPreview = (ch: ChallengeExtStore) => {
         const t = ch.metricType ?? guessType(ch.title, ch.description);
-        const dur = ch.metricDurationMin ?? estimateDuration(t, ch.metricDistanceKm, extractMinutes(ch.description));
+        const dur =
+            ch.metricDurationMin ??
+            estimateDuration(t, ch.metricDistanceKm, extractMinutes(ch.description));
         const intensity = ch.metricIntensity ?? defaultIntensity(t);
         const kcal = ch.metricCalories ?? estimateCaloriesFor(t, dur, intensity);
         return `${kcal} kcal`;
     };
 
-    const onComplete = (ch: ChallengeExtStore) => {
-        const type = ch.metricType ?? guessType(ch.title, ch.description);
-        const durationMin =
-            ch.metricDurationMin ?? estimateDuration(type, ch.metricDistanceKm, extractMinutes(ch.description));
-        const distanceKm = ch.metricDistanceKm ?? extractKm(`${ch.title} ${ch.description}`);
-        const intensity = ch.metricIntensity ?? defaultIntensity(type);
+    // === helper pra criar atividade local/POST ===
+    function buildActivityPayloadFromChallenge(ch: ChallengeExtStore): ActivityPayload {
+        const t = (ch.metricType ?? guessType(ch.title, ch.description)) as ActivityPayload["type"];
+        const dur =
+            ch.metricDurationMin ??
+            estimateDuration(t as ActivityKey, ch.metricDistanceKm, extractMinutes(ch.description));
+        const intensity = (ch.metricIntensity ?? defaultIntensity(t as ActivityKey)) as ActivityPayload["intensity"];
+        const kcal = ch.metricCalories ?? estimateCaloriesFor(t as ActivityKey, dur, intensity as any);
 
-        // 👉 REGISTRA COM A DATA/HORA ATUAL (garante cair na semana vigente)
-        const when = new Date();
-
-        addActivity({
-            type,
-            dateISO: when.toISOString(),
-            durationMin,
-            distanceKm,
+        return {
+            type: t,
+            dateISO: new Date().toISOString(),
+            durationMin: dur,
+            distanceKm: ch.metricDistanceKm,
             intensity,
-            mood: 4,
+            mood: 3,
             environment: "open",
-            calories: ch.metricCalories, // se vier, respeitamos
-            notes: ch.fromEvent
-                ? `Registro do evento: ${ch.eventTitle ?? ch.title} (data do evento: ${ch.eventDate ?? "—"})`
-                : `Registro do desafio: ${ch.title}`,
-        });
+            notes: `Gerada ao concluir "${ch.title}"`,
+            calories: kcal,
+        };
+    }
 
-        completeChallenge(ch.id);
+    // ---------- helpers locais para atualizar o espelho ----------
+    const mergeIntoActiveMirror = (items: ChallengeExtStore[] | ChallengeAPI[]) => {
+        const arr = Array.isArray(items) ? items : [items];
+        const normalized: ChallengeExtStore[] = (arr as any[]).map((c: any) => ({
+            id: String(c.id),
+            sourceId: String(c.sourceId ?? c.id),
+            title: String(c.title ?? ""),
+            description: c.description ?? "",
+            rewardXP: Number(c.rewardXP ?? 0),
+            status: (c.status ?? "active") as any,
+            expiresInDays: c.expiresInDays,
+            durationDays: c.durationDays,
+            metricType: c.metricType,
+            metricDurationMin: c.metricDurationMin,
+            metricDistanceKm: c.metricDistanceKm,
+            metricIntensity: c.metricIntensity,
+            metricCalories: c.metricCalories,
+            fromEvent: !!c.fromEvent,
+            eventTitle: c.eventTitle,
+            eventDate: c.eventDate,
+            eventLocation: c.eventLocation,
+            startedAt: c.startedAt,
+            instanceId: c.instanceId,
+            completedAt: c.completedAt,
+        }));
+
+        setActiveMirror((prev) => {
+            const prevArr = Array.isArray(prev) ? prev : [];
+            const map = new Map<string, ChallengeExtStore>();
+            [...prevArr, ...normalized].forEach((it) => {
+                if (it?.id) map.set(it.id, it);
+            });
+            return Array.from(map.values());
+        });
+    };
+
+    const refetchAndMirrorActives = async () => {
+        try {
+            const serverActives = await listChallenges("active");
+            setActiveFromServer?.(serverActives as any);
+            mergeIntoActiveMirror(serverActives as any);
+        } catch { }
+    };
+
+    // ---------- JOIN (Evento) ----------
+    const handleJoinEvent = async (ev: CommunityEvent) => {
+        if (joining[ev.id]) return;
+        try {
+            setJoining((m) => ({ ...m, [ev.id]: true }));
+
+            const created = await joinChallengeEvent({
+                id: ev.id,
+                title: ev.title,
+                date: ev.date,
+                location: ev.location,
+            });
+
+            if (typeof joinEventToActive === "function") {
+                joinEventToActive({
+                    id: created.id,
+                    title: created.title,
+                    description: created.description ?? "",
+                    rewardXP: created.rewardXP,
+                    status: "active",
+                    expiresInDays: created.expiresInDays,
+                    durationDays: created.durationDays,
+                    metricType: created.metricType as ActivityKey | undefined,
+                    metricDurationMin: created.metricDurationMin,
+                    metricDistanceKm: created.metricDistanceKm,
+                    metricIntensity: created.metricIntensity as Intensity | undefined,
+                    metricCalories: created.metricCalories,
+                    fromEvent: true,
+                    eventTitle: created.eventTitle ?? created.title,
+                    eventDate: created.eventDate,
+                    eventLocation: created.eventLocation,
+                    startedAt: created.startedAt,
+                    sourceId: (created as any).sourceId ?? ev.id,
+                } as any);
+            } else {
+                console.warn("[Desafios] joinEventToActive ausente — usando fallback local.");
+            }
+
+            // espelho local garante UI
+            mergeIntoActiveMirror([{ ...created, sourceId: (created as any).sourceId ?? ev.id } as any]);
+
+            Alert.alert("Inscrição confirmada", `Você entrou em: ${ev.title}`);
+        } catch (e: any) {
+            if (e?.status === 409) {
+                await refetchAndMirrorActives();
+                Alert.alert("Você já está participando", "Esse evento já está nos seus Desafios Ativos.");
+            } else {
+                Alert.alert("Não foi possível participar", String(e?.message ?? e));
+            }
+        } finally {
+            setJoining((m) => ({ ...m, [ev.id]: false }));
+        }
+    };
+
+    // ---------- COMPLETE ----------
+    const onComplete = async (ch: ChallengeExtStore) => {
+        if (completing[ch.id]) return;
+        setCompleting((m) => ({ ...m, [ch.id]: true }));
+        try {
+            const { activeRemovedId, completedAdded, createdActivity } =
+                await completeChallengeServer(ch.id);
+
+            // Atualiza listas (ativo -> concluído)
+            completeFromServer?.({
+                activeRemovedId: activeRemovedId || ch.id,
+                completedAdded: { ...completedAdded, status: "completed" } as any,
+            });
+
+            // Remove do espelho local
+            setActiveMirror((prev) =>
+                Array.isArray(prev) ? prev.filter((x) => x.id !== (activeRemovedId || ch.id)) : []
+            );
+
+            if (createdActivity) {
+                // veio do servidor -> só empurra e dispara refresh das métricas
+                pushActivity?.({
+                    id: createdActivity.id,
+                    type: createdActivity.type,
+                    dateISO: createdActivity.dateISO,
+                    durationMin: createdActivity.durationMin,
+                    distanceKm: createdActivity.distanceKm,
+                    intensity: createdActivity.intensity,
+                    mood: createdActivity.mood,
+                    environment: createdActivity.environment,
+                    notes: createdActivity.notes,
+                    calories: createdActivity.calories,
+                });
+                bus.emit("metrics:refresh");
+            } else {
+                // não veio atividade -> cria manualmente e persiste
+                const payload = buildActivityPayloadFromChallenge(ch);
+                try {
+                    const saved = await createActivity(payload);
+                    pushActivity?.({
+                        id: saved.id,
+                        type: saved.type,
+                        dateISO: saved.dateISO,
+                        durationMin: saved.durationMin,
+                        distanceKm: saved.distanceKm,
+                        intensity: saved.intensity,
+                        mood: saved.mood,
+                        environment: saved.environment,
+                        notes: saved.notes,
+                        calories: saved.calories,
+                    });
+                    bus.emit("metrics:refresh");
+                } catch (err: any) {
+                    console.warn("[Desafios] createActivity falhou:", err?.message);
+                    // fallback local
+                    pushActivity?.({
+                        id: `local-${ch.id}-${Date.now()}`,
+                        ...payload,
+                    });
+                    bus.emit("metrics:refresh");
+                }
+            }
+
+            Alert.alert("Boa!", `Desafio concluído: ${ch.title}`);
+        } catch (e: any) {
+            if (String(e?.message || "").includes("404") || e?.status === 404) {
+                // Fallback offline: conclui localmente e ainda tenta persistir a atividade
+                completeFromServer?.({
+                    activeRemovedId: ch.id,
+                    completedAdded: {
+                        ...ch,
+                        status: "completed",
+                        instanceId: `comp-${ch.id}-${Date.now()}`,
+                        completedAt: new Date().toISOString(),
+                    } as any,
+                });
+                setActiveMirror((prev) => (Array.isArray(prev) ? prev.filter((x) => x.id !== ch.id) : []));
+
+                const payload = buildActivityPayloadFromChallenge(ch);
+                try {
+                    const saved = await createActivity(payload);
+                    pushActivity?.({
+                        id: saved.id,
+                        type: saved.type,
+                        dateISO: saved.dateISO,
+                        durationMin: saved.durationMin,
+                        distanceKm: saved.distanceKm,
+                        intensity: saved.intensity,
+                        mood: saved.mood,
+                        environment: saved.environment,
+                        notes: saved.notes,
+                        calories: saved.calories,
+                    });
+                    bus.emit("metrics:refresh");
+                } catch {
+                    pushActivity?.({
+                        id: `local-${ch.id}-${Date.now()}`,
+                        ...payload,
+                    });
+                    bus.emit("metrics:refresh");
+                }
+            } else {
+                Alert.alert("Erro ao concluir", String(e?.message ?? e));
+            }
+        } finally {
+            setCompleting((m) => ({ ...m, [ch.id]: false }));
+        }
     };
 
     return (
@@ -206,148 +535,213 @@ export default function DesafiosPage() {
                 Desafios
             </Text>
 
-            {/* Desafios Ativos */}
-            <Section title="Desafios Ativos">
-                {activeChallenges.length === 0 ? (
-                    <EmptyState
-                        text="Você ainda não tem desafios ativos."
-                        hint="Adicione um desafio disponível ou participe de um evento da comunidade."
-                    />
-                ) : (
-                    activeChallenges.map((ch) => (
-                        <ChallengeItem
-                            key={ch.id}
-                            challenge={ch}
-                            bgColor={colors.mascots.navajoWhite}
-                            footerLine={ch.fromEvent ? undefined : "Expira em: "}
-                            footerStrong={ch.fromEvent ? undefined : `${ch.expiresInDays ?? "—"} dias`}
-                            meta={{
-                                duration: formatDurationHuman(ch.metricDurationMin),
-                                distance: formatDistanceHuman(ch.metricDistanceKm),
-                                xp: `${ch.rewardXP} XP`,
-                                calories: caloriesPreview(ch),
-                            }}
-                        >
-                            <Button
-                                label="Concluir desafio"
-                                fullWidth
-                                onPress={() => onComplete(ch)}
-                                style={{ marginTop: spacing.sm }}
+            {loading ? (
+                <ActivityIndicator style={{ marginTop: spacing.md }} />
+            ) : (
+                <>
+                    {/* Desafios Ativos */}
+                    <Section title="Desafios Ativos">
+                        {(activeUnique?.length ?? 0) === 0 ? (
+                            <EmptyState
+                                text="Você ainda não tem desafios ativos."
+                                hint="Adicione um desafio disponível ou participe de um evento da comunidade."
                             />
-                        </ChallengeItem>
-                    ))
-                )}
-            </Section>
+                        ) : (
+                            (Array.isArray(activeUnique) ? activeUnique : []).map((ch) => (
+                                <ChallengeItem
+                                    key={ch.id}
+                                    challenge={ch}
+                                    bgColor={colors.mascots.navajoWhite}
+                                    footerLine={ch.fromEvent ? undefined : "Expira em: "}
+                                    footerStrong={ch.fromEvent ? undefined : `${ch.expiresInDays ?? "—"} dias`}
+                                    meta={{
+                                        duration: formatDurationHuman(ch.metricDurationMin),
+                                        distance: formatDistanceHuman(ch.metricDistanceKm),
+                                        xp: `${ch.rewardXP} XP`,
+                                        calories: caloriesPreview(ch),
+                                    }}
+                                >
+                                    <Button
+                                        label="Concluir desafio"
+                                        fullWidth
+                                        onPress={() => onComplete(ch)}
+                                        loading={!!completing[ch.id]}
+                                        disabled={!!completing[ch.id]}
+                                        style={{ marginTop: spacing.sm }}
+                                    />
+                                </ChallengeItem>
+                            ))
+                        )}
+                    </Section>
 
-            {/* Desafios Disponíveis */}
-            <Section title="Desafios Disponíveis">
-                {available.length === 0 ? (
-                    <EmptyState text="Sem novos desafios no momento." hint="Fique de olho, em breve teremos mais!" />
-                ) : (
-                    available.map((ch) => (
-                        <ChallengeItem
-                            key={ch.id}
-                            challenge={ch as unknown as ChallengeExtStore}
-                            bgColor={colors.mascots.lightSteelBlue}
-                            footerLine="Tempo de duração: "
-                            footerStrong={`${ch.durationDays ?? "—"} dias`}
-                            meta={{
-                                duration: formatDurationHuman(ch.metricDurationMin),
-                                distance: formatDistanceHuman(ch.metricDistanceKm),
-                                xp: `${ch.rewardXP} XP`,
-                                calories: (() => {
-                                    const t = ch.metricType ?? guessType(ch.title, ch.description);
-                                    const dur = ch.metricDurationMin ?? estimateDuration(t, ch.metricDistanceKm, extractMinutes(ch.description));
-                                    const intensity = ch.metricIntensity ?? defaultIntensity(t);
-                                    const kcal = ch.metricCalories ?? estimateCaloriesFor(t, dur, intensity);
-                                    return `${kcal} kcal`;
-                                })(),
-                            }}
-                        >
-                            <Button
-                                label={activeIds.has(ch.id) ? "Já adicionado" : "Adicionar Desafio"}
-                                fullWidth
-                                disabled={activeIds.has(ch.id)}
-                                onPress={() => {
-                                    addAvailableChallengeToActive(ch);
-                                    setAvailable((prev) => prev.filter((v) => v.id !== ch.id));
-                                }}
-                                style={{ marginTop: spacing.sm }}
-                            />
-                        </ChallengeItem>
-                    ))
-                )}
-            </Section>
+                    {/* Desafios Disponíveis */}
+                    <Section title="Desafios Disponíveis">
+                        {(available?.length ?? 0) === 0 ? (
+                            <EmptyState text="Sem novos desafios no momento." hint="Fique de olho, em breve teremos mais!" />
+                        ) : (
+                            (Array.isArray(available) ? available : []).map((ch) => (
+                                <ChallengeItem
+                                    key={ch.id}
+                                    challenge={
+                                        {
+                                            ...ch,
+                                            status: "active",
+                                        } as unknown as ChallengeExtStore
+                                    }
+                                    bgColor={colors.mascots.lightSteelBlue}
+                                    footerLine="Tempo de duração: "
+                                    footerStrong={`${ch.durationDays ?? "—"} dias`}
+                                    meta={{
+                                        duration: formatDurationHuman(ch.metricDurationMin),
+                                        distance: formatDistanceHuman(ch.metricDistanceKm),
+                                        xp: `${ch.rewardXP} XP`,
+                                        calories: (() => {
+                                            const t = ch.metricType ?? guessType(ch.title, ch.description);
+                                            const dur =
+                                                ch.metricDurationMin ??
+                                                estimateDuration(t, ch.metricDistanceKm, extractMinutes(ch.description));
+                                            const intensity = ch.metricIntensity ?? defaultIntensity(t);
+                                            const kcal = ch.metricCalories ?? estimateCaloriesFor(t, dur, intensity);
+                                            return `${kcal} kcal`;
+                                        })(),
+                                    }}
+                                >
+                                    <Button
+                                        label={activeSourceIds.has(ch.id) ? "Já adicionado" : "Adicionar Desafio"}
+                                        fullWidth
+                                        disabled={activeSourceIds.has(ch.id) || !!activating[ch.id]}
+                                        loading={!!activating[ch.id]}
+                                        onPress={async () => {
+                                            if (activating[ch.id]) return;
+                                            setActivating((m) => ({ ...m, [ch.id]: true }));
 
-            {/* Eventos da Comunidade */}
-            <Section title="Eventos da Comunidade">
-                {events.map((ev) => {
-                    const syntheticId = `ev-${ev.id}`;
-                    const alreadyJoined = activeIds.has(syntheticId);
-                    return (
-                        <EventItem
-                            key={ev.id}
-                            event={ev}
-                            meta={{
-                                duration: formatDurationHuman(ev.metricDurationMin),
-                                distance: formatDistanceHuman(ev.metricDistanceKm),
-                                xp: `${ev.rewardXP} XP`,
-                                calories: (() => {
-                                    const t = ev.metricType ?? guessType(ev.title, ev.description);
-                                    const dur = ev.metricDurationMin ?? estimateDuration(t, ev.metricDistanceKm, extractMinutes(ev.description));
-                                    const intensity = ev.metricIntensity ?? defaultIntensity(t);
-                                    const kcal = ev.metricCalories ?? estimateCaloriesFor(t, dur, intensity);
-                                    return `${kcal} kcal`;
-                                })(),
-                            }}
-                        >
-                            <Button
-                                label={alreadyJoined ? "Já participando" : "Participar do Evento"}
-                                fullWidth
-                                disabled={alreadyJoined}
-                                onPress={() =>
-                                    joinEventToActive({
-                                        ...ev,
-                                        date: ev.date,
-                                        location: ev.location,
-                                    })
-                                }
-                                style={{ marginTop: spacing.sm }}
-                            />
-                        </EventItem>
-                    );
-                })}
-            </Section>
+                                            try {
+                                                const created = await activateAvailableChallenge(ch);
 
-            {/* Desafios Concluídos */}
-            <Section title="Desafios Concluídos">
-                {completedChallenges.length === 0 ? (
-                    <EmptyState text="Nenhum desafio concluído ainda." hint="Quando concluir, eles aparecem aqui." />
-                ) : (
-                    completedChallenges.map((ch, idx) => (
-                        <ChallengeItem
-                            key={ch.instanceId ?? `${ch.id}-${idx}` /* chave sempre única */}
-                            challenge={ch}
-                            bgColor={colors.gray[200]}
-                            muted
-                            footerLine={ch.fromEvent ? undefined : "Tempo de duração: "}
-                            footerStrong={
-                                ch.fromEvent
-                                    ? undefined
-                                    : `${(ch as any).durationDays ?? ch.expiresInDays ?? "—"} dias`
-                            }
-                            meta={{
-                                duration: formatDurationHuman(ch.metricDurationMin),
-                                distance: formatDistanceHuman(ch.metricDistanceKm),
-                                xp: `${ch.rewardXP} XP`,
-                                calories: caloriesPreview(ch),
-                            }}
-                        />
-                    ))
-                )}
-            </Section>
+                                                if (typeof addAvailableChallengeToActive === "function") {
+                                                    addAvailableChallengeToActive({
+                                                        id: created.id,
+                                                        sourceId: (created as any).sourceId ?? ch.id,
+                                                        title: created.title,
+                                                        description: created.description ?? "",
+                                                        rewardXP: created.rewardXP,
+                                                        durationDays: created.durationDays,
+                                                        expiresInDays: created.expiresInDays,
+                                                        metricType: created.metricType as ActivityKey | undefined,
+                                                        metricDurationMin: created.metricDurationMin,
+                                                        metricDistanceKm: created.metricDistanceKm,
+                                                        metricIntensity: created.metricIntensity as Intensity | undefined,
+                                                        metricCalories: created.metricCalories,
+                                                        startedAt: created.startedAt,
+                                                    } as any);
+                                                } else {
+                                                    console.warn("[Desafios] addAvailableChallengeToActive ausente — usando fallback local.");
+                                                }
 
-            <View style={{ height: spacing.lg }} />
+                                                // espelho local
+                                                mergeIntoActiveMirror([
+                                                    { ...created, sourceId: (created as any).sourceId ?? ch.id } as any,
+                                                ]);
+
+                                                // remove dos disponíveis (id da fonte)
+                                                setAvailable((prev) =>
+                                                    Array.isArray(prev) ? prev.filter((v) => v.id !== ch.id) : []
+                                                );
+                                            } catch (e: any) {
+                                                if (e?.status === 409) {
+                                                    await refetchAndMirrorActives();
+                                                    setAvailable((prev) =>
+                                                        Array.isArray(prev)
+                                                            ? prev.filter((v) => !activeSourceIds.has(v.id))
+                                                            : []
+                                                    );
+                                                    Alert.alert("Já está ativo", "Esse desafio já está na sua lista de Ativos.");
+                                                } else {
+                                                    Alert.alert("Erro", String(e?.message ?? e));
+                                                }
+                                            } finally {
+                                                setActivating((m) => ({ ...m, [ch.id]: false }));
+                                            }
+                                        }}
+                                        style={{ marginTop: spacing.sm }}
+                                    />
+                                </ChallengeItem>
+                            ))
+                        )}
+                    </Section>
+
+                    {/* Eventos da Comunidade */}
+                    <Section title="Eventos da Comunidade">
+                        {(Array.isArray(events) ? events : []).map((ev) => {
+                            const alreadyJoined = (activeUnique ?? []).some(
+                                (a) => a?.fromEvent && String(a.sourceId ?? a.id) === ev.id
+                            );
+                            const isLoading = !!joining[ev.id];
+                            return (
+                                <EventItem
+                                    key={ev.id}
+                                    event={ev}
+                                    meta={{
+                                        duration: formatDurationHuman(ev.metricDurationMin),
+                                        distance: formatDistanceHuman(ev.metricDistanceKm),
+                                        xp: `${ev.rewardXP} XP`,
+                                        calories: (() => {
+                                            const t = ev.metricType ?? guessType(ev.title, ev.description);
+                                            const dur =
+                                                ev.metricDurationMin ??
+                                                estimateDuration(t, ev.metricDistanceKm, extractMinutes(ev.description));
+                                            const intensity = ev.metricIntensity ?? defaultIntensity(t);
+                                            const kcal = ev.metricCalories ?? estimateCaloriesFor(t, dur, intensity);
+                                            return `${kcal} kcal`;
+                                        })(),
+                                    }}
+                                >
+                                    <Button
+                                        label={alreadyJoined ? "Já participando" : "Participar do Evento"}
+                                        fullWidth
+                                        disabled={alreadyJoined || isLoading}
+                                        loading={isLoading}
+                                        onPress={() => handleJoinEvent(ev)}
+                                        style={{ marginTop: spacing.sm }}
+                                    />
+                                </EventItem>
+                            );
+                        })}
+                    </Section>
+
+                    {/* Desafios Concluídos */}
+                    <Section title="Desafios Concluídos">
+                        {(completedChallenges?.length ?? 0) === 0 ? (
+                            <EmptyState text="Nenhum desafio concluído ainda." hint="Quando concluir, eles aparecem aqui." />
+                        ) : (
+                            (Array.isArray(completedChallenges) ? completedChallenges : []).map(
+                                (ch: ChallengeExtStore, idx: number) => (
+                                    <ChallengeItem
+                                        key={ch.instanceId ?? `${ch.id}-${idx}`}
+                                        challenge={ch}
+                                        bgColor={colors.gray[200]}
+                                        muted
+                                        footerLine={ch.fromEvent ? undefined : "Tempo de duração: "}
+                                        footerStrong={
+                                            ch.fromEvent
+                                                ? undefined
+                                                : `${(ch as any).durationDays ?? ch.expiresInDays ?? "—"} dias`
+                                        }
+                                        meta={{
+                                            duration: formatDurationHuman(ch.metricDurationMin),
+                                            distance: formatDistanceHuman(ch.metricDistanceKm),
+                                            xp: `${ch.rewardXP} XP`,
+                                            calories: caloriesPreview(ch),
+                                        }}
+                                    />
+                                )
+                            )
+                        )}
+                    </Section>
+
+                    <View style={{ height: spacing.lg }} />
+                </>
+            )}
         </Screen>
     );
 }
@@ -454,6 +848,7 @@ function ChallengeItem({
                 backgroundColor: bgColor,
                 borderRadius: 16,
                 padding: spacing.md,
+                opacity: muted ? 0.85 : 1,
             }}
         >
             <Text variant="subtitle" weight="bold" style={{ marginBottom: spacing.xs }}>
@@ -499,10 +894,11 @@ function EventItem({
     children,
 }: {
     event: CommunityEvent;
-    meta?: { duration?: string; distance?: string; xp?: string; calories?: string };
+    meta?: { duration?: string; distance?: string; calories?: string; xp?: string };
     children?: React.ReactNode;
 }) {
-    const location = event.location && event.location !== "—" ? event.location : "Parque do Ibirapuera";
+    const location =
+        event.location && event.location !== "—" ? event.location : "Parque do Ibirapuera";
     const date = event.date || "A definir";
 
     return (

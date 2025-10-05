@@ -5,10 +5,6 @@ import React from "react";
 
 export default function AuthLayout() {
     const { user } = useAuth();
-
-    if (user) {
-        return <Redirect href="/(tabs)" />;
-    }
-
+    if (user) return <Redirect href="/(tabs)" />;
     return <Stack screenOptions={{ headerShown: false }} />;
 }

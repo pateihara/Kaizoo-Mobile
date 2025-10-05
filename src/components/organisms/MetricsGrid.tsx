@@ -1,82 +1,56 @@
 // src/components/organisms/MetricsGrid.tsx
-import MetricCard from "@/components/molecules/MetricCard";
-import { useActivityStore } from "@/contexts/ActivityContext";
-import { colors, spacing } from "@/theme";
-import React, { useMemo } from "react";
+import Text from "@/components/atoms/Text";
+import { colors, radius, spacing } from "@/theme";
+import React from "react";
 import { View } from "react-native";
 
-function startOfWeek(d = new Date()) {
-    const x = new Date(d);
-    const day = x.getDay(); // 0=Dom, 1=Seg...
-    const diff = (day === 0 ? -6 : 1) - day; // começar na Segunda
-    x.setDate(x.getDate() + diff);
-    x.setHours(0, 0, 0, 0);
-    return x;
-}
-function endOfWeek(d = new Date()) {
-    const s = startOfWeek(d);
-    const e = new Date(s);
-    e.setDate(s.getDate() + 7);
-    e.setHours(0, 0, 0, 0);
-    return e;
-}
-function isoToDate(iso: string) {
-    return new Date(iso);
-}
-function fmtHours(mins: number) {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return `${h}h${m.toString().padStart(2, "0")}`;
-}
-function round1(n: number) {
-    return Math.round(n * 10) / 10;
-}
+export type WeeklyData = {
+    activeDays: number;
+    activeMinutes: number;
+    distanceKm: number;
+    calories: number;
+};
 
-export default function MetricsGrid() {
-    const { activities } = useActivityStore();
+export type MetricsGridProps = {
+    loading?: boolean;
+    error?: string;
+    data?: WeeklyData;
+};
 
-    const { daysActive, activeMin, km, kcal } = useMemo(() => {
-        const s = startOfWeek();
-        const e = endOfWeek();
-        const weekActs = activities.filter((a) => {
-            const d = isoToDate(a.dateISO);
-            return d >= s && d < e;
-        });
+export default function MetricsGrid({ loading, error, data }: MetricsGridProps) {
+    if (loading) {
+        return (
+            <View style={{ marginBottom: spacing.lg }}>
+                <Text variant="body">Carregando…</Text>
+            </View>
+        );
+    }
 
-        const dayKeys = new Set<string>();
-        let min = 0;
-        let dist = 0;
-        let cal = 0;
+    if (error) {
+        return (
+            <View style={{ marginBottom: spacing.lg }}>
+                <Text variant="body" color={colors.mascots.lightCoral[600]}>Erro: {error}</Text>
+            </View>
+        );
+    }
 
-        for (const a of weekActs) {
-            const d = isoToDate(a.dateISO);
-            dayKeys.add(d.toDateString());
-            min += a.durationMin || 0;
-            dist += a.distanceKm || 0;
-            cal += a.calories || 0;
-        }
-        return {
-            daysActive: dayKeys.size,
-            activeMin: min,
-            km: dist,
-            kcal: Math.round(cal),
-        };
-    }, [activities]);
+    const d: WeeklyData = data ?? { activeDays: 0, activeMinutes: 0, distanceKm: 0, calories: 0 };
 
     return (
-        <View
-            style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                justifyContent: "space-between",
-                marginBottom: spacing.lg,
-                gap: spacing.md,
-            }}
-        >
-            <MetricCard value={String(daysActive)} label="Dias Ativos" bg={colors.mascots.navajoWhite} />
-            <MetricCard value={fmtHours(activeMin)} label="Horas Ativas" bg={colors.mascots.lightSteelBlue} />
-            <MetricCard value={`${round1(km)} km`} label="Km Percorridos" bordered />
-            <MetricCard value={String(kcal)} label="Calorias Queimadas" bg="#EAC4D5" />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: spacing.lg }}>
+            <MetricCard label="Dias ativos" value={`${d.activeDays}`} />
+            <MetricCard label="Minutos ativos" value={`${d.activeMinutes}`} />
+            <MetricCard label="Distância (km)" value={d.distanceKm.toFixed(2)} />
+            <MetricCard label="Calorias" value={`${Math.round(d.calories)}`} />
+        </View>
+    );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+    return (
+        <View style={{ width: "48%", backgroundColor: colors.white, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md }}>
+            <Text variant="subtitle" weight="bold" style={{ marginBottom: spacing.xs }}>{value}</Text>
+            <Text variant="body" color={colors.gray[700]}>{label}</Text>
         </View>
     );
 }

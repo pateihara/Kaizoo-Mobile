@@ -44,6 +44,10 @@ export default function RegisterScreen() {
     }, []);
 
     const onCreate = async () => {
+        if (!email.trim()) {
+            Alert.alert("Informe um e-mail válido");
+            return;
+        }
         if (pass !== pass2) {
             Alert.alert("Senhas não conferem", "Verifique e tente novamente.");
             return;

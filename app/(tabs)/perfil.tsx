@@ -1,16 +1,31 @@
 // app/(tabs)/perfil.tsx
+import { useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
+
 import Button from "@/components/atoms/Button";
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import Screen from "@/components/templates/Screen";
-import { useAuth } from "@/contexts/AuthContext";
-import { colors, radius, spacing } from "@/theme";
-import { useRouter } from "expo-router";
-import React from "react";
-import { View } from "react-native";
 
-/** --------- DATA MOCK (troque depois pelos seus dados reais) --------- */
-const PROFILE = {
+import { useAuth } from "@/contexts/AuthContext";
+import { fetchMyProfile } from "@/services/profile";
+import { colors, radius, spacing } from "@/theme";
+
+/** Tipos de UI (color opcional) */
+type MetricItem = { value: string; label: string; color?: string; bordered?: boolean };
+type ProfileUI = {
+    name: string;
+    bio: string;
+    statsTop: { friends: number; communities: number; mascots: number };
+    metrics: MetricItem[];
+    badges: number[];
+    gallery: number[];
+    favorites: string[];
+};
+
+/** --------- MOCK (fallback) --------- */
+const PROFILE_FALLBACK: ProfileUI = {
     name: "Julia Costa",
     bio:
         "Adoro começar o dia com movimento e boas energias. Entre um alongamento e uma pedalada no parque, busco leveza, saúde e motivação no meu ritmo.",
@@ -25,15 +40,50 @@ const PROFILE = {
         { value: "156", label: "Metas Cumpridas", color: colors.mascots.navajoWhite },
         { value: "5", label: "Atividades Praticadas", color: colors.mascots.lightSteelBlue },
     ],
-    badges: [1, 2, 3], // placeholders
-    gallery: [1, 2, 3, 4], // placeholders
+    badges: [1, 2, 3],
+    gallery: [1, 2, 3, 4],
     favorites: ["🚶‍♀️", "🧘‍♀️", "🙆‍♂️", "🏃‍♂️", "🚴‍♀️", "🌿"],
 };
-/** -------------------------------------------------------------------- */
+/** ----------------------------------- */
 
 export default function PerfilScreen() {
     const router = useRouter();
-    const { signOut } = useAuth();
+    const { signOut, user } = useAuth();
+
+    const [loading, setLoading] = useState(true);
+    const [profile, setProfile] = useState<ProfileUI | null>(null);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const u = await fetchMyProfile(); // GET /profile/me
+                const mapped: ProfileUI = {
+                    name: u.name || PROFILE_FALLBACK.name,
+                    bio: u.bio || PROFILE_FALLBACK.bio,
+                    statsTop: {
+                        friends: u.statsTop?.friends ?? PROFILE_FALLBACK.statsTop.friends,
+                        communities: u.statsTop?.communities ?? PROFILE_FALLBACK.statsTop.communities,
+                        mascots: u.statsTop?.mascots ?? PROFILE_FALLBACK.statsTop.mascots,
+                    },
+                    // color pode vir ausente; o componente já tem fallback visual
+                    metrics: Array.isArray(u.metrics) && u.metrics.length ? u.metrics : PROFILE_FALLBACK.metrics,
+                    badges: Array.isArray(u.badges) ? u.badges : PROFILE_FALLBACK.badges,
+                    gallery: Array.isArray(u.gallery) ? u.gallery : PROFILE_FALLBACK.gallery,
+                    favorites: Array.isArray(u.favorites) ? u.favorites : PROFILE_FALLBACK.favorites,
+                };
+                setProfile(mapped);
+            } catch {
+                setProfile(PROFILE_FALLBACK);
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, []);
+
+    // Seu AuthContext expõe somente { id, email }, então não use user.name.
+    const displayName = useMemo(() => {
+        return profile?.name || user?.email || PROFILE_FALLBACK.name;
+    }, [profile?.name, user?.email]);
 
     const onInvite = () => { };
     const onShare = () => { };
@@ -41,6 +91,17 @@ export default function PerfilScreen() {
         await signOut();
         router.replace("/(auth)/login");
     };
+
+    if (loading || !profile) {
+        return (
+            <Screen>
+                <Text variant="title" weight="bold" style={{ marginBottom: spacing.sm }}>
+                    Perfil
+                </Text>
+                <ActivityIndicator style={{ marginTop: spacing.md }} />
+            </Screen>
+        );
+    }
 
     return (
         <Screen>
@@ -63,7 +124,7 @@ export default function PerfilScreen() {
                         overflow: "hidden",
                     }}
                 >
-                    {/* Se tiver imagem real, troque pelo <Image source={...} /> */}
+                    {/* Se tiver imagem real, troque por: <Image source={{ uri: profile.avatarUrl }} /> */}
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                         <Text variant="title" weight="bold">🙂</Text>
                     </View>
@@ -71,13 +132,13 @@ export default function PerfilScreen() {
 
                 {/* Nome + Bio */}
                 <Text variant="subtitle" weight="bold" style={{ marginBottom: spacing.xs }}>
-                    {PROFILE.name}
+                    {displayName}
                 </Text>
                 <Text variant="body" color={colors.gray[800]}>
-                    {PROFILE.bio}
+                    {profile.bio}
                 </Text>
 
-                {/* Linha de stats (amigos / comunidades / mascotes) */}
+                {/* Linha de stats */}
                 <View
                     style={{
                         flexDirection: "row",
@@ -90,18 +151,22 @@ export default function PerfilScreen() {
                         marginTop: spacing.md,
                     }}
                 >
-                    <MiniStat label="AMIGOS" value={PROFILE.statsTop.friends} />
-                    <MiniStat label="COMUNIDADES" value={PROFILE.statsTop.communities} />
-                    <MiniStat label="MASCOTES" value={PROFILE.statsTop.mascots} />
+                    <MiniStat label="AMIGOS" value={profile.statsTop.friends} />
+                    <MiniStat label="COMUNIDADES" value={profile.statsTop.communities} />
+                    <MiniStat label="MASCOTES" value={profile.statsTop.mascots} />
                 </View>
 
                 {/* Ações */}
                 <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
-                    <Button label="Convidar Amigos" fullWidth />
+                    <Button label="Convidar Amigos" fullWidth onPress={onInvite} />
                     <Button label="Compartilhar" variant="secondary" fullWidth onPress={onShare} />
 
-                    {/* Botão laranja como no mock (usando children para controlar a cor do texto) */}
-                    <Button variant="secondary" fullWidth style={{ backgroundColor: colors.mascots.navajoWhite }} onPress={onSignOut}>
+                    <Button
+                        variant="secondary"
+                        fullWidth
+                        style={{ backgroundColor: colors.mascots.navajoWhite }}
+                        onPress={onSignOut}
+                    >
                         <Text variant="button" color={colors.black} style={{ textAlign: "center", width: "100%" }}>
                             sair do app
                         </Text>
@@ -115,9 +180,9 @@ export default function PerfilScreen() {
                     Badges
                 </Text>
                 <View style={{ flexDirection: "row", gap: spacing.md }}>
-                    {PROFILE.badges.map((b) => (
+                    {(profile.badges || []).map((b, idx) => (
                         <View
-                            key={b}
+                            key={`${b}-${idx}`}
                             style={{
                                 width: 52,
                                 height: 52,
@@ -137,7 +202,7 @@ export default function PerfilScreen() {
             </Card>
 
             {/* Métricas em grade */}
-            <MetricsGrid />
+            <MetricsGrid items={profile.metrics} />
 
             {/* Galeria de Registros */}
             <Card style={{ padding: spacing.md }}>
@@ -147,9 +212,9 @@ export default function PerfilScreen() {
                 </View>
 
                 <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                    {PROFILE.gallery.map((g) => (
+                    {(profile.gallery || []).map((g, idx) => (
                         <View
-                            key={g}
+                            key={`${g}-${idx}`}
                             style={{
                                 width: 64, height: 64, borderRadius: radius.md,
                                 backgroundColor: colors.gray[200],
@@ -165,7 +230,7 @@ export default function PerfilScreen() {
                     Atividades Preferidas
                 </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-                    {PROFILE.favorites.map((emoji, idx) => (
+                    {(profile.favorites || []).map((emoji, idx) => (
                         <DarkPill key={idx} emoji={emoji} />
                     ))}
                 </View>
@@ -176,8 +241,7 @@ export default function PerfilScreen() {
     );
 }
 
-/** ---------- Helpers locais (molecules/organisms inline) ---------- */
-
+/** ---------- Helpers ---------- */
 function MiniStat({ label, value }: { label: string; value: number | string }) {
     return (
         <View style={{ alignItems: "center" }}>
@@ -191,9 +255,7 @@ function MiniStat({ label, value }: { label: string; value: number | string }) {
     );
 }
 
-function MetricsGrid() {
-    const items = PROFILE.metrics;
-
+function MetricsGrid({ items }: { items: MetricItem[] }) {
     return (
         <View
             style={{
@@ -208,7 +270,7 @@ function MetricsGrid() {
                     key={idx}
                     style={{
                         width: "48%",
-                        backgroundColor: m.color,
+                        backgroundColor: m.color ?? colors.gray[200],
                         borderRadius: radius.lg,
                         paddingVertical: spacing.lg,
                         paddingHorizontal: spacing.md,

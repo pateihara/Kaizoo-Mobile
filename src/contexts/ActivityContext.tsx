@@ -1,165 +1,183 @@
 // src/contexts/ActivityContext.tsx
-import React, { createContext, useContext, useMemo, useState } from "react";
+import { ActivityKey, Intensity } from "@/services/challenges";
+import React, { createContext, ReactNode, useContext, useMemo, useState } from "react";
 
-export type ActivityKey = "alongamento" | "caminhada" | "corrida" | "pedalada" | "yoga" | "outro";
-export type Intensity = "low" | "medium" | "high";
-export type Mood = 1 | 2 | 3 | 4 | 5;
-export type Environment = "open" | "closed";
+export type ChallengeExt = {
+    sourceId: string;
+    id: string;
+    title: string;
+    description?: string;
+    rewardXP: number;
+    status: "active" | "completed";
+    startedAt?: string;
+    completedAt?: string;
 
-export type ActivityEntry = {
+    durationDays?: number;
+    expiresInDays?: number;
+
+    metricType?: ActivityKey;
+    metricDurationMin?: number;
+    metricDistanceKm?: number;
+    metricIntensity?: Intensity;
+    metricCalories?: number;
+
+    fromEvent?: boolean;
+    eventTitle?: string;
+    eventDate?: string;
+    eventLocation?: string;
+
+    instanceId?: string;
+};
+
+export type ActivityItem = {
     id: string;
     type: ActivityKey;
     dateISO: string;
     durationMin: number;
     distanceKm?: number;
     intensity: Intensity;
-    mood: Mood;
-    environment: Environment;
+    mood: 1 | 2 | 3 | 4 | 5;
+    environment: "open" | "closed";
     notes?: string;
-    calories?: number; // se não vier, estimamos
+    calories?: number;
 };
 
-export type ChallengeBase = {
-    id: string;
-    title: string;
-    description: string;
-    rewardXP: number;
-    durationDays?: number;
-    expiresInDays?: number;
-
-    // ---- métricas definidas/sugeridas pelo desafio/evento ----
-    metricType?: ActivityKey;
-    metricDurationMin?: number;
-    metricDistanceKm?: number;
-    metricIntensity?: Intensity;
-    metricCalories?: number;
-};
-
-export type ChallengeExt = ChallengeBase & {
-    fromEvent?: boolean;
-    eventTitle?: string;
-    eventDate?: string;   // dd/mm/yyyy
-    eventLocation?: string;
-    completed?: boolean;
-
-    // ✅ identidade única por conclusão
-    instanceId?: string;
-    completedAtISO?: string;
-};
-
-type Ctx = {
-    activities: ActivityEntry[];
-    addActivity: (e: Omit<ActivityEntry, "id" | "calories"> & Partial<Pick<ActivityEntry, "calories">>) => void;
-
+type Store = {
     activeChallenges: ChallengeExt[];
     completedChallenges: ChallengeExt[];
-    addAvailableChallengeToActive: (c: ChallengeBase) => void;
-    joinEventToActive: (c: ChallengeBase & { date?: string; location?: string }) => void;
-    completeChallenge: (id: string) => void;
+    activities: ActivityItem[];
+
+    // ações
+    setActiveFromServer: (list: ChallengeExt[]) => void;
+    addAvailableChallengeToActive: (c: Omit<ChallengeExt, "status">) => void;
+    joinEventToActive: (c: ChallengeExt) => void;
+    completeFromServer: (payload: { activeRemovedId: string; completedAdded: ChallengeExt }) => void;
+    pushActivity: (a: ActivityItem) => void;
+
+    // helpers (opcional)
+    getWeeklySummary: (weekStartISO: string) => {
+        activeDays: number;
+        activeMinutes: number;
+        distanceKm: number;
+        calories: number;
+    };
 };
 
-// ---------- calorias ----------
-const KG_DEFAULT = 70; // suposição simples
-const METS: Record<ActivityKey, number> = {
-    alongamento: 2.3,
-    caminhada: 3.5,
-    corrida: 9.0,
-    pedalada: 7.0,
-    yoga: 3.0,
-    outro: 3.5,
-};
-const INTENSITY_MULT: Record<Intensity, number> = { low: 0.85, medium: 1.0, high: 1.15 };
+const ActivityContext = createContext<Store | null>(null);
 
-export function estimateCaloriesFor(type: ActivityKey, durationMin: number, intensity: Intensity, kg = KG_DEFAULT) {
-    const met = (METS[type] ?? 3.5) * (INTENSITY_MULT[intensity] ?? 1);
-    // kcal = MET * 3.5 * peso(kg) / 200 * minutos
-    return Math.round((met * 3.5 * kg) / 200 * durationMin);
+export function estimateCaloriesFor(type: ActivityKey, durationMin: number, intensity: Intensity, kg = 70) {
+    const METS: Record<ActivityKey, number> = {
+        alongamento: 2.3, caminhada: 3.5, corrida: 9, pedalada: 7, yoga: 3, outro: 3.5
+    };
+    const MULT: Record<Intensity, number> = { low: 0.85, medium: 1, high: 1.15 };
+    const met = (METS[type] ?? 3.5) * (MULT[intensity] ?? 1);
+    return Math.round(((met * 3.5 * kg) / 200) * durationMin);
 }
 
-const ActivityContext = createContext<Ctx | null>(null);
-export const useActivityStore = () => {
-    const v = useContext(ActivityContext);
-    if (!v) throw new Error("ActivityContext not found. Wrap your app with <ActivityProvider />");
-    return v;
-};
+export function ActivityProvider({ children }: { children: ReactNode }) {
+    const [activeChallenges, setActive] = useState<ChallengeExt[]>([]);
+    const [completedChallenges, setCompleted] = useState<ChallengeExt[]>([]);
+    const [activities, setActivities] = useState<ActivityItem[]>([]);
 
-export function ActivityProvider({ children }: { children: React.ReactNode }) {
-    const [activities, setActivities] = useState<ActivityEntry[]>([]);
-    const [activeChallenges, setActiveChallenges] = useState<ChallengeExt[]>([]);
-    const [completedChallenges, setCompletedChallenges] = useState<ChallengeExt[]>([]);
-
-    const addActivity: Ctx["addActivity"] = (e) => {
-        const calories =
-            typeof e.calories === "number"
-                ? e.calories
-                : estimateCaloriesFor(e.type, e.durationMin, e.intensity);
-        const id = `act-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        setActivities((prev) => [...prev, { ...e, id, calories }]);
+    const setActiveFromServer: Store["setActiveFromServer"] = (list) => {
+        // garante status e sourceId; dedup por id
+        const map = new Map<string, ChallengeExt>();
+        list.forEach((c) => {
+            const normalized: ChallengeExt = {
+                ...c,
+                status: "active",
+                sourceId: String(c.sourceId ?? c.id),
+            };
+            map.set(normalized.id, normalized);
+        });
+        setActive(Array.from(map.values()));
     };
 
-    const addAvailableChallengeToActive: Ctx["addAvailableChallengeToActive"] = (c) => {
-        setActiveChallenges((prev) => {
-            if (prev.some((p) => p.id === c.id)) return prev;
-            const expiresInDays = c.durationDays ?? c.expiresInDays ?? 7;
-            return [...prev, { ...c, expiresInDays }];
+    const addAvailableChallengeToActive: Store["addAvailableChallengeToActive"] = (c) => {
+        const normalized: ChallengeExt = {
+            ...c,
+            status: "active",
+            sourceId: String(c.sourceId ?? c.id),
+        };
+        setActive((prev) => {
+            if (prev.some((x) => x.id === normalized.id)) return prev;
+            return [normalized, ...prev];
         });
     };
 
-    const joinEventToActive: Ctx["joinEventToActive"] = (e) => {
-        const id = `ev-${e.id}`;
-        setActiveChallenges((prev) => {
-            if (prev.some((p) => p.id === id)) return prev;
-            return [
-                ...prev,
-                {
-                    ...e,
-                    id,
-                    fromEvent: true,
-                    eventTitle: e.title,
-                    eventDate: (e as any).date || "A definir",
-                    eventLocation:
-                        (e as any).location && (e as any).location !== "—" ? (e as any).location : "Parque do Ibirapuera",
-                    expiresInDays: e.expiresInDays ?? 3,
-                },
-            ];
+    const joinEventToActive: Store["joinEventToActive"] = (c) => {
+        const normalized: ChallengeExt = {
+            ...c,
+            status: "active",
+            fromEvent: true,
+            sourceId: String(c.sourceId ?? c.id),
+        };
+        setActive((prev) => {
+            if (prev.some((x) => x.id === normalized.id)) return prev;
+            return [normalized, ...prev];
         });
     };
 
-    const completeChallenge: Ctx["completeChallenge"] = (id) => {
-        setActiveChallenges((prev) => {
-            const idx = prev.findIndex((p) => p.id === id);
-            if (idx === -1) return prev;
-            const item = prev[idx];
-
-            setCompletedChallenges((pc) => {
-                // ✅ gera uma identidade única para esta conclusão
-                const instanceId = `comp-${id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-                const completedAtISO = new Date().toISOString();
-
-                // evita duplicar exatamente a mesma conclusão (raro, mas seguro)
-                if (pc.some((c) => c.instanceId === instanceId)) return pc;
-
-                return [{ ...item, completed: true, instanceId, completedAtISO }, ...pc];
-            });
-
-            const next = prev.slice();
-            next.splice(idx, 1);
-            return next;
-        });
+    const completeFromServer: Store["completeFromServer"] = ({ activeRemovedId, completedAdded }) => {
+        setActive((prev) =>
+            prev.filter((c) => c.id !== activeRemovedId && c.sourceId !== activeRemovedId)
+        );
+        setCompleted((prev) => [
+            { ...completedAdded, status: "completed", sourceId: String(completedAdded.sourceId ?? completedAdded.id) },
+            ...prev,
+        ]);
     };
 
-    const value: Ctx = useMemo(
-        () => ({
-            activities,
-            addActivity,
-            activeChallenges,
-            completedChallenges,
-            addAvailableChallengeToActive,
-            joinEventToActive,
-            completeChallenge,
-        }),
-        [activities, activeChallenges, completedChallenges]
-    );
+    const pushActivity: Store["pushActivity"] = (a) => {
+        setActivities((prev) => [a, ...prev]);
+    };
+
+    const getWeeklySummary: Store["getWeeklySummary"] = (weekStartISO) => {
+        const start = new Date(weekStartISO).getTime();
+        const end = start + 7 * 24 * 60 * 60 * 1000;
+        const inWeek = activities.filter((a) => {
+            const t = new Date(a.dateISO).getTime();
+            return t >= start && t < end;
+        });
+
+        const activeDays = new Set(inWeek.map((a) => new Date(a.dateISO).toISOString().slice(0, 10))).size;
+        const activeMinutes = inWeek.reduce((s, a) => s + (a.durationMin || 0), 0);
+        const distanceKm = inWeek.reduce((s, a) => s + (a.distanceKm || 0), 0);
+        const calories = inWeek.reduce((s, a) => s + (a.calories || 0), 0);
+
+        return { activeDays, activeMinutes, distanceKm, calories };
+    };
+
+    const value = useMemo<Store>(() => ({
+        activeChallenges,
+        completedChallenges,
+        activities,
+        setActiveFromServer,
+        addAvailableChallengeToActive,
+        joinEventToActive,
+        completeFromServer,
+        pushActivity,
+        getWeeklySummary,
+    }), [activeChallenges, completedChallenges, activities]);
 
     return <ActivityContext.Provider value={value}>{children}</ActivityContext.Provider>;
+}
+
+/**
+ * Hook “store completo”
+ * Uso: const { activeChallenges, addAvailableChallengeToActive } = useActivityStore();
+ */
+export function useActivityStore(): Store {
+    const ctx = useContext(ActivityContext);
+    if (!ctx) throw new Error("useActivityStore must be used within ActivityProvider");
+    return ctx;
+}
+
+/**
+ * Hook “selector” (igual conceito do Zustand, mas via Context)
+ * Uso: const add = useActivitySelector(s => s.addAvailableChallengeToActive);
+ */
+export function useActivitySelector<T>(selector: (s: Store) => T): T {
+    const store = useActivityStore();
+    return selector(store);
 }

@@ -1,3 +1,5 @@
+//// app/(tabs)/index.tsx
+
 import Screen from "@/components/templates/Screen";
 
 import AchievementsSection from "@/components/organisms/AchievementsSection";

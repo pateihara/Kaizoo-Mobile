@@ -1,20 +1,14 @@
 // app/kaizoo/form.tsx
-import Button from "@/components/atoms/Button";
-import Text from "@/components/atoms/Text";
-import { radius, spacing } from "@/theme";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React from "react";
-import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
-} from "react-native";
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// --- Perguntas ---
+import Button from "@/components/atoms/Button";
+import Text from "@/components/atoms/Text";
+import { saveOnboardingPreferences } from "@/services/profile";
+import { radius, spacing } from "@/theme";
+
 const Q1 = {
     title: "Qual o seu objetivo principal com exercícios?",
     key: "goal",
@@ -33,26 +27,15 @@ const Q3 = {
     options: ["Corrida / Caminhada", "Ciclismo", "Musculação", "Yoga / Alongamento"],
 } as const;
 
-type Answers = {
-    goal?: string;
-    freq?: string;
-    likes: string[]; // <- múltipla escolha
-};
+type Answers = { goal?: string; freq?: string; likes: string[] };
 
 export default function KaizooForm() {
     const router = useRouter();
     const [answers, setAnswers] = React.useState<Answers>({ likes: [] });
 
-    // radios (Q1, Q2)
-    const setAnswer = (k: "goal" | "freq", v: string) =>
-        setAnswers((a) => ({ ...a, [k]: v }));
-
-    // checkboxes (Q3)
+    const setAnswer = (k: "goal" | "freq", v: string) => setAnswers((a) => ({ ...a, [k]: v }));
     const toggleLike = (opt: string) =>
-        setAnswers((a) => {
-            const exists = a.likes.includes(opt);
-            return { ...a, likes: exists ? a.likes.filter((x) => x !== opt) : [...a.likes, opt] };
-        });
+        setAnswers((a) => ({ ...a, likes: a.likes.includes(opt) ? a.likes.filter((x) => x !== opt) : [...a.likes, opt] }));
 
     const validate = () => {
         if (!answers.goal || !answers.freq || answers.likes.length === 0) {
@@ -64,10 +47,8 @@ export default function KaizooForm() {
 
     const finalize = async () => {
         if (!validate()) return;
-
         try {
-            await AsyncStorage.setItem("onboarding:quiz", JSON.stringify(answers));
-            await AsyncStorage.setItem("profile:ready", "1");
+            await saveOnboardingPreferences({ goal: answers.goal!, freq: answers.freq!, likes: answers.likes });
             router.replace("/kaizoo/success");
         } catch (e: any) {
             Alert.alert("Não foi possível finalizar", String(e?.message ?? e));
@@ -79,7 +60,6 @@ export default function KaizooForm() {
     return (
         <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
             <ScrollView contentContainerStyle={{ paddingBottom: spacing.xl }} style={styles.container}>
-                {/* Etapa */}
                 <View style={{ padding: spacing.lg, paddingTop: spacing.xl }}>
                     <View style={styles.stepPill}>
                         <Text weight="bold">2. Breve Questionário</Text>
@@ -93,50 +73,40 @@ export default function KaizooForm() {
                         </Text>
 
                         <View style={styles.block}>
-                            <Text weight="bold" style={styles.blockTitle}>{Q1.title}</Text>
+                            <Text weight="bold" style={styles.blockTitle}>
+                                {Q1.title}
+                            </Text>
                             <View style={{ gap: 14, marginTop: spacing.sm }}>
                                 {Q1.options.map((opt) => (
-                                    <RadioRow
-                                        key={opt}
-                                        label={opt}
-                                        selected={answers.goal === opt}
-                                        onPress={() => setAnswer("goal", opt)}
-                                    />
+                                    <RadioRow key={opt} label={opt} selected={answers.goal === opt} onPress={() => setAnswer("goal", opt)} />
                                 ))}
                             </View>
                         </View>
 
                         <View style={styles.block}>
-                            <Text weight="bold" style={styles.blockTitle}>{Q2.title}</Text>
+                            <Text weight="bold" style={styles.blockTitle}>
+                                {Q2.title}
+                            </Text>
                             <View style={{ gap: 14, marginTop: spacing.sm }}>
                                 {Q2.options.map((opt) => (
-                                    <RadioRow
-                                        key={opt}
-                                        label={opt}
-                                        selected={answers.freq === opt}
-                                        onPress={() => setAnswer("freq", opt)}
-                                    />
+                                    <RadioRow key={opt} label={opt} selected={answers.freq === opt} onPress={() => setAnswer("freq", opt)} />
                                 ))}
                             </View>
                         </View>
 
                         <View style={styles.block}>
-                            <Text weight="bold" style={styles.blockTitle}>{Q3.title}</Text>
+                            <Text weight="bold" style={styles.blockTitle}>
+                                {Q3.title}
+                            </Text>
                             <View style={{ gap: 14, marginTop: spacing.sm }}>
                                 {Q3.options.map((opt) => (
-                                    <CheckboxRow
-                                        key={opt}
-                                        label={opt}
-                                        checked={answers.likes.includes(opt)}
-                                        onPress={() => toggleLike(opt)}
-                                    />
+                                    <CheckboxRow key={opt} label={opt} checked={answers.likes.includes(opt)} onPress={() => toggleLike(opt)} />
                                 ))}
                             </View>
                         </View>
                     </View>
                 </View>
 
-                {/* Ações */}
                 <View style={{ padding: spacing.lg, gap: spacing.sm }}>
                     <Button label="finalizar" variant="onboardingFilled" onPress={finalize} fullWidth />
                     <Button label="voltar" variant="onboardingOutline" onPress={goBack} fullWidth />
@@ -146,15 +116,7 @@ export default function KaizooForm() {
     );
 }
 
-function RadioRow({
-    label,
-    selected,
-    onPress,
-}: {
-    label: string;
-    selected?: boolean;
-    onPress?: () => void;
-}) {
+function RadioRow({ label, selected, onPress }: { label: string; selected?: boolean; onPress?: () => void }) {
     return (
         <TouchableOpacity
             onPress={onPress}
@@ -163,23 +125,13 @@ function RadioRow({
             accessibilityRole="radio"
             accessibilityState={{ selected: !!selected }}
         >
-            <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
-                {selected ? <View style={styles.radioInner} /> : null}
-            </View>
+            <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>{selected ? <View style={styles.radioInner} /> : null}</View>
             <Text style={styles.radioLabel}>{label}</Text>
         </TouchableOpacity>
     );
 }
 
-function CheckboxRow({
-    label,
-    checked,
-    onPress,
-}: {
-    label: string;
-    checked?: boolean;
-    onPress?: () => void;
-}) {
+function CheckboxRow({ label, checked, onPress }: { label: string; checked?: boolean; onPress?: () => void }) {
     return (
         <TouchableOpacity
             onPress={onPress}
@@ -188,9 +140,7 @@ function CheckboxRow({
             accessibilityRole="checkbox"
             accessibilityState={{ checked: !!checked }}
         >
-            <View style={[styles.checkboxBox, checked && styles.checkboxBoxActive]}>
-                {checked ? <View style={styles.checkboxTick} /> : null}
-            </View>
+            <View style={[styles.checkboxBox, checked && styles.checkboxBoxActive]}>{checked ? <View style={styles.checkboxTick} /> : null}</View>
             <Text style={styles.checkboxLabel}>{label}</Text>
         </TouchableOpacity>
     );
@@ -199,43 +149,18 @@ function CheckboxRow({
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: "black" },
     container: { flex: 1, backgroundColor: "black" },
-
-    stepPill: {
-        alignSelf: "center",
-        backgroundColor: "white",
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 999,
-    },
-
-    card: {
-        backgroundColor: "white",
-        borderRadius: radius.lg ?? 16,
-        padding: spacing.lg,
-    },
-
+    stepPill: { alignSelf: "center", backgroundColor: "white", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999 },
+    card: { backgroundColor: "white", borderRadius: radius.lg ?? 16, padding: spacing.lg },
     block: { marginTop: spacing.lg },
     blockTitle: { fontSize: 16, lineHeight: 22 },
-
-    // Radio
     radioRow: { flexDirection: "row", alignItems: "center", columnGap: 12 },
-    radioOuter: {
-        width: 26, height: 26, borderRadius: 26, borderWidth: 2, borderColor: "#2B2B2B",
-        alignItems: "center", justifyContent: "center",
-    },
+    radioOuter: { width: 26, height: 26, borderRadius: 26, borderWidth: 2, borderColor: "#2B2B2B", alignItems: "center", justifyContent: "center" },
     radioOuterActive: { borderColor: "#86E3D2" },
     radioInner: { width: 14, height: 14, borderRadius: 14, backgroundColor: "#86E3D2" },
     radioLabel: { fontSize: 18, lineHeight: 24, color: "#111" },
-
-    // Checkbox
     checkboxRow: { flexDirection: "row", alignItems: "center", columnGap: 12 },
-    checkboxBox: {
-        width: 26, height: 26, borderRadius: 8, borderWidth: 2, borderColor: "#2B2B2B",
-        alignItems: "center", justifyContent: "center",
-    },
+    checkboxBox: { width: 26, height: 26, borderRadius: 8, borderWidth: 2, borderColor: "#2B2B2B", alignItems: "center", justifyContent: "center" },
     checkboxBoxActive: { borderColor: "#86E3D2", backgroundColor: "#E9FBF7" },
-    checkboxTick: {
-        width: 14, height: 14, borderRadius: 3, backgroundColor: "#86E3D2",
-    },
+    checkboxTick: { width: 14, height: 14, borderRadius: 3, backgroundColor: "#86E3D2" },
     checkboxLabel: { fontSize: 18, lineHeight: 24, color: "#111" },
 });

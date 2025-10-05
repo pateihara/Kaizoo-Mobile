@@ -6,10 +6,12 @@ import Text from "@/components/atoms/Text";
 import FriendAvatar from "@/components/molecules/FriendAvatar";
 import Screen from "@/components/templates/Screen";
 import { useActivityStore } from "@/contexts/ActivityContext";
+import { bus } from "@/lib/bus";
+import { ActivityPayload, createActivity } from "@/services/activities";
 import { colors, radius, spacing } from "@/theme";
 import DateTimePicker, { AndroidNativeProps, IOSNativeProps } from "@react-native-community/datetimepicker";
 import React, { useMemo, useState } from "react";
-import { Dimensions, Platform, Pressable, View } from "react-native";
+import { Alert, Dimensions, Platform, Pressable, View } from "react-native";
 
 /** ------------------------- tipos e mocks ------------------------- */
 type ActivityKey = "alongamento" | "caminhada" | "corrida" | "pedalada" | "yoga" | "outro";
@@ -23,8 +25,11 @@ const ACTIVITY_OPTIONS: { key: ActivityKey; label: string; icon: string }[] = [
     { key: "outro", label: "Outro", icon: "➕" },
 ];
 
-// Simplificado conforme sua orientação
-const SPECIFIC_BY_ACTIVITY: Record<ActivityKey, Array<{ key: string; type: "text" | "number" | "multiline" }>> = {
+// Schema específico por atividade
+const SPECIFIC_BY_ACTIVITY: Record<
+    ActivityKey,
+    Array<{ key: string; type: "text" | "number" | "multiline" }>
+> = {
     alongamento: [{ key: "Observações", type: "multiline" }],
     caminhada: [{ key: "Distância (km)", type: "number" }],
     corrida: [{ key: "Distância (km)", type: "number" }],
@@ -56,6 +61,11 @@ const MOOD_OPTIONS: Array<{ value: Mood; emoji: string; label: string }> = [
 // Ambiente
 type Environment = "open" | "closed";
 
+// --- helper para “alisar” o tipo do zustand hook com selector ---
+function useStoreSelector<T>(selector: (s: any) => T): T {
+    return (useActivityStore as unknown as (sel: (s: any) => T) => T)(selector);
+}
+
 /** ----------------------------- page ------------------------------ */
 export default function ActivityPage() {
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -63,30 +73,25 @@ export default function ActivityPage() {
 
     // Campos padrão
     const [date, setDate] = useState<Date>(new Date());
-
-    // Duração em MINUTOS (evita fuso/DST)
-    const [durationMin, setDurationMin] = useState<number>(30); // 00:30 padrão
+    // Duração em minutos
+    const [durationMin, setDurationMin] = useState<number>(30);
 
     const [intensity, setIntensity] = useState<Intensity | null>(null);
     const [mood, setMood] = useState<Mood | null>(null);
     const [environment, setEnvironment] = useState<Environment | null>(null);
 
-    // Pickers (visibilidade)
+    // Pickers
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showTimePicker, setShowTimePicker] = useState(false);
 
-    // Amigos (step 3)
+    // Amigos (step 3) — apenas UI
     const [friendQuery, setFriendQuery] = useState("");
     const [addedFriends, setAddedFriends] = useState<Array<"dino" | "kaia" | "penny" | "tato">>([]);
 
     // Campos específicos
-    const specificSchema = useMemo(
-        () => SPECIFIC_BY_ACTIVITY[activity ?? "alongamento"],
-        [activity]
-    );
+    const specificSchema = useMemo(() => SPECIFIC_BY_ACTIVITY[activity ?? "alongamento"], [activity]);
     const [specificValues, setSpecificValues] = useState<Record<string, string>>({});
-    const updateSpecific = (key: string, v: string) =>
-        setSpecificValues((p) => ({ ...p, [key]: v }));
+    const updateSpecific = (key: string, v: string) => setSpecificValues((p) => ({ ...p, [key]: v }));
 
     const goNext = () => {
         if (step === 1) return setStep(2);
@@ -98,7 +103,7 @@ export default function ActivityPage() {
         if (step === 2) return setStep(1);
     };
 
-    // Handlers Date/Time (Android/iOS)
+    // Date/Time pickers
     const onPickDate: AndroidNativeProps["onChange"] & IOSNativeProps["onChange"] = (_, selected) => {
         if (Platform.OS === "android") setShowDatePicker(false);
         if (selected) setDate(selected);
@@ -113,7 +118,7 @@ export default function ActivityPage() {
         }
     };
 
-    // Helpers para exibição
+    // Helpers
     const formatDate = (d: Date) =>
         d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
 
@@ -123,15 +128,72 @@ export default function ActivityPage() {
         return `${h}:${m}`;
     };
 
-    // Date para alimentar o picker (só para a UI do relógio)
     const durationAsDate = useMemo(() => {
         const h = Math.floor(durationMin / 60);
         const m = durationMin % 60;
         return new Date(1970, 0, 1, h, m, 0, 0);
     }, [durationMin]);
 
-    // Store global (salvar atividade)
-    const { addActivity } = useActivityStore();
+    // pega SOMENTE a função addActivity do store (se existir)
+    type AddActivityInput = {
+        id: string;
+        type: ActivityKey;
+        dateISO: string;
+        durationMin: number;
+        distanceKm?: number;
+        intensity: Intensity;
+        mood: Mood;
+        environment: "open" | "closed";
+        notes?: string;
+        calories?: number;
+    };
+    const addActivity = useStoreSelector<((a: AddActivityInput) => void) | undefined>((s) => s.addActivity);
+
+    // Submit final
+    const handleSubmit = async () => {
+        const distStr = (specificValues["Distância (km)"] ?? "").replace(",", ".");
+        const distanceKm = distStr ? parseFloat(distStr) : undefined;
+        const notes = (specificValues["Observações"] || "").slice(0, 500);
+
+        const payload: ActivityPayload = {
+            type: activity ?? "outro",
+            dateISO: new Date(date).toISOString(),
+            durationMin,
+            distanceKm,
+            intensity: (intensity ?? "medium") as Intensity,
+            mood: (mood ?? 3) as Mood,
+            environment: (environment ?? "open") as Environment,
+            notes,
+        };
+
+        try {
+            const created = await createActivity(payload);
+
+            // Atualiza store local (se existir). Se não houver store, tudo bem.
+            if (typeof addActivity === "function") {
+                addActivity({
+                    id: created.id,
+                    type: created.type as ActivityKey,
+                    dateISO: created.dateISO,
+                    durationMin: created.durationMin,
+                    distanceKm: created.distanceKm,
+                    intensity: created.intensity as Intensity,
+                    mood: created.mood as Mood,
+                    environment: created.environment as "open" | "closed",
+                    notes: created.notes,
+                    calories: created.calories,
+                });
+            }
+
+            // 🔔 avisa a tela de métricas para refazer o fetch
+            bus.emit("metrics:refresh");
+
+            goNext(); // mostra “sucesso”
+        } catch (e: any) {
+            console.warn(e);
+            Alert.alert("Não foi possível salvar", e?.message ?? "Tente novamente em instantes.");
+        }
+    };
 
     return (
         <Screen>
@@ -142,12 +204,7 @@ export default function ActivityPage() {
             </Text>
 
             {step !== 4 ? (
-                <Card
-                    style={{
-                        padding: spacing.lg,
-                        borderRadius: radius.lg,
-                    }}
-                >
+                <Card style={{ padding: spacing.lg, borderRadius: radius.lg }}>
                     {/* Step 1 — Escolha de atividade */}
                     {step === 1 && (
                         <>
@@ -174,20 +231,21 @@ export default function ActivityPage() {
                     {/* Step 2 — Campos padrão + específicos */}
                     {step === 2 && (
                         <View style={{ gap: spacing.lg }}>
-                            {/* Chip com atividade selecionada no topo */}
                             {activity && (
                                 <SelectedActivityChip
                                     activity={activity}
                                     onChange={() => {
                                         setActivity(null);
-                                        setStep(1); // voltar e trocar
+                                        setStep(1);
                                     }}
                                 />
                             )}
 
                             {/* Campos padrão */}
                             <View style={{ gap: spacing.md }}>
-                                <Text variant="subtitle" weight="bold">Dados Padrão</Text>
+                                <Text variant="subtitle" weight="bold">
+                                    Dados Padrão
+                                </Text>
 
                                 {/* Data */}
                                 <FieldLabel label="Data" />
@@ -253,7 +311,9 @@ export default function ActivityPage() {
                             {/* Dados específicos */}
                             {activity && specificSchema.length > 0 && (
                                 <View style={{ gap: spacing.md }}>
-                                    <Text variant="subtitle" weight="bold">Dados Específicos</Text>
+                                    <Text variant="subtitle" weight="bold">
+                                        Dados Específicos
+                                    </Text>
                                     {specificSchema.map((f) => {
                                         if (f.type === "multiline") {
                                             return (
@@ -300,7 +360,9 @@ export default function ActivityPage() {
                     {/* Step 3 — Amigos */}
                     {step === 3 && (
                         <View style={{ marginTop: spacing.xs, gap: spacing.md }}>
-                            <Text variant="subtitle" weight="bold">Adicionar Amigos</Text>
+                            <Text variant="subtitle" weight="bold">
+                                Adicionar Amigos
+                            </Text>
 
                             <Input
                                 placeholder="buscar por e-mail"
@@ -339,9 +401,8 @@ export default function ActivityPage() {
                                 variant="secondary"
                                 label="Adicionar amigo mock"
                                 onPress={() => {
-                                    const pool: any[] = ["dino", "kaia", "penny", "tato"];
-                                    const next = pool[(addedFriends.length % pool.length) as number] as
-                                        | "dino" | "kaia" | "penny" | "tato";
+                                    const pool: Array<"dino" | "kaia" | "penny" | "tato"> = ["dino", "kaia", "penny", "tato"];
+                                    const next = pool[addedFriends.length % pool.length];
                                     setAddedFriends((p) => [...p, next]);
                                 }}
                             />
@@ -373,28 +434,14 @@ export default function ActivityPage() {
                     <Button
                         label={step === 3 ? "Registrar atividade" : "Próximo"}
                         fullWidth
-                        onPress={() => {
+                        onPress={async () => {
                             if (step === 3) {
-                                const distStr = (specificValues["Distância (km)"] ?? "").replace(",", ".");
-                                const distanceKm = distStr ? parseFloat(distStr) : undefined;
-
-                                addActivity({
-                                    type: (activity ?? "outro") as any,
-                                    dateISO: new Date(date).toISOString(),
-                                    durationMin,
-                                    distanceKm,
-                                    intensity: (intensity ?? "medium") as any,
-                                    mood: (mood ?? 3) as any,
-                                    environment: (environment ?? "open") as any,
-                                    notes: specificValues["Observações"],
-                                });
+                                await handleSubmit();
+                                return;
                             }
                             goNext();
                         }}
-                        disabled={
-                            (step === 1 && !activity) ||
-                            (step === 2 && (!activity || !intensity || !mood || !environment))
-                        }
+                        disabled={(step === 1 && !activity) || (step === 2 && (!activity || !intensity || !mood || !environment))}
                     />
                     {step > 1 ? (
                         <Button
@@ -434,7 +481,6 @@ export default function ActivityPage() {
 
 /** --------------------------- helpers UI --------------------------- */
 
-// Stepper responsivo
 function Stepper({
     current,
     onJump,
@@ -485,14 +531,7 @@ function Stepper({
     );
 
     return (
-        <View
-            style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                alignItems: "center",
-                marginBottom: spacing.md,
-            }}
-        >
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginBottom: spacing.md }}>
             <Item n={1} active={current === 1} onPress={() => onJump?.(1)} />
             <Arrow />
             <Item n={2} active={current === 2} onPress={() => onJump?.(2)} />
@@ -510,15 +549,7 @@ function Arrow() {
     );
 }
 
-function OptionPill({
-    label,
-    icon,
-    onPress,
-}: {
-    label: string;
-    icon: string;
-    onPress?: () => void;
-}) {
+function OptionPill({ label, icon, onPress }: { label: string; icon: string; onPress?: () => void }) {
     return (
         <Button
             variant="secondary"
@@ -541,13 +572,7 @@ function OptionPill({
     );
 }
 
-function SelectedActivityChip({
-    activity,
-    onChange,
-}: {
-    activity: ActivityKey;
-    onChange: () => void;
-}) {
+function SelectedActivityChip({ activity, onChange }: { activity: ActivityKey; onChange: () => void }) {
     const meta = ACTIVITY_OPTIONS.find((a) => a.key === activity)!;
     return (
         <View
@@ -563,7 +588,9 @@ function SelectedActivityChip({
             }}
         >
             <Text variant="subtitle">{meta.icon}</Text>
-            <Text variant="button" weight="bold">{meta.label}</Text>
+            <Text variant="button" weight="bold">
+                {meta.label}
+            </Text>
             <Pressable
                 onPress={onChange}
                 style={{
@@ -576,7 +603,9 @@ function SelectedActivityChip({
                 accessibilityRole="button"
                 accessibilityLabel="Trocar atividade"
             >
-                <Text variant="button" color={colors.black}>trocar</Text>
+                <Text variant="button" color={colors.black}>
+                    trocar
+                </Text>
             </Pressable>
         </View>
     );
@@ -671,13 +700,7 @@ function SegmentedBinary<T extends "open" | "closed">({
     );
 }
 
-function MoodPicker({
-    value,
-    onChange,
-}: {
-    value: Mood | null;
-    onChange: (m: Mood) => void;
-}) {
+function MoodPicker({ value, onChange }: { value: Mood | null; onChange: (m: Mood) => void }) {
     return (
         <View style={{ flexDirection: "row", gap: spacing.md }}>
             {MOOD_OPTIONS.map((m) => {

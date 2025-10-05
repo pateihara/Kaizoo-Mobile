@@ -69,6 +69,9 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding/index" />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="kaizoo/select" />
+          <Stack.Screen name="kaizoo/form" />
+          <Stack.Screen name="kaizoo/success" />
         </Stack>
       </ActivityProvider>
     </AuthProvider>

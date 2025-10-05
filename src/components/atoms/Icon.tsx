@@ -1,3 +1,4 @@
+//// @/components/atoms/Icon.tsx
 import { colors } from "@/theme";
 import { Ionicons } from "@expo/vector-icons";
 
