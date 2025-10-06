@@ -22,17 +22,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { finishOnboarding } from "@/services/profile";
 import { colors, radius, spacing } from "@/theme";
 
-import frontdino from "assets/images/card-dino.png";
-import frontkaia from "assets/images/card-kaia.png";
-import frontkoa from "assets/images/card-koa.png";
-import frontpenny from "assets/images/card-penny.png";
-import fronttato from "assets/images/card-tato.png";
+import frontdino from "../../assets/images/card-dino.png";
+import frontkaia from "../../assets/images/card-kaia.png";
+import frontkoa from "../../assets/images/card-koa.png";
+import frontpenny from "../../assets/images/card-penny.png";
+import fronttato from "../../assets/images/card-tato.png";
 
-import backdino from "assets/images/StarDino.png";
-import backkaia from "assets/images/StarKaia.png";
-import backkoa from "assets/images/StarKoa.png";
-import backpenny from "assets/images/StarPenny.png";
-import backtato from "assets/images/StarTato.png";
+import backdino from "../../assets/images/StarDino.png";
+import backkaia from "../../assets/images/StarKaia.png";
+import backkoa from "../../assets/images/StarKoa.png";
+import backpenny from "../../assets/images/StarPenny.png";
+import backtato from "../../assets/images/StarTato.png";
 
 const { width } = Dimensions.get("window");
 
