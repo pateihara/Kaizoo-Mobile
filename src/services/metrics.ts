@@ -2,6 +2,7 @@
 import { getJSON } from "@/lib/api";
 
 export type WeeklyMetricsDTO = {
+    totalCalories: number;
     activeDays: number;
     activeMinutes: number;
     distanceKm: number;

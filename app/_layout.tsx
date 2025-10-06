@@ -1,4 +1,5 @@
 // app/_layout.tsx
+// app/_layout.tsx
 import { badges, BG, bitmapIcons, iconFriend, logo, mascots, transp } from "@/assets";
 import {
   Poppins_400Regular,
@@ -16,6 +17,7 @@ import { useEffect, useState } from "react";
 import { ActivityProvider } from "@/contexts/ActivityContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 
+// evita sumir antes da hora
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
 export default function RootLayout() {
@@ -31,6 +33,7 @@ export default function RootLayout() {
     deactivateKeepAwake().catch(() => { });
   }, []);
 
+  // pré-carrega imagens/bitmaps
   useEffect(() => {
     (async () => {
       try {
@@ -52,6 +55,7 @@ export default function RootLayout() {
     })();
   }, []);
 
+  // esconde o splash quando tudo pronto
   useEffect(() => {
     if (assetsReady && fontsLoaded) {
       SplashScreen.hideAsync().catch(() => { });
@@ -64,15 +68,9 @@ export default function RootLayout() {
     <AuthProvider>
       <ActivityProvider>
         <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="onboarding/index" />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="kaizoo/select" />
-          <Stack.Screen name="kaizoo/form" />
-          <Stack.Screen name="kaizoo/success" />
-        </Stack>
+        {/* Importante: não registre rotas-filhas manualmente aqui.
+            O expo-router descobre TODAS as rotas olhando a pasta app/ */}
+        <Stack screenOptions={{ headerShown: false }} />
       </ActivityProvider>
     </AuthProvider>
   );
