@@ -1,3 +1,4 @@
+// //src/components/organisms/Header.tsx
 import { colors, spacing } from "@/theme";
 import { View } from "react-native";
 import Icon from "../atoms/Icon";

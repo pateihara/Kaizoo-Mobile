@@ -1,4 +1,4 @@
-//src/components/Button.tsx
+//src/components/atoms/Button.tsx
 import Text from "@/components/atoms/Text";
 import { colors, radius, spacing } from "@/theme";
 import React from "react";

@@ -1,41 +1,23 @@
 // src/services/auth.ts
-import { apiFetch, tokenStore } from "./api";
+import { postJSON } from "@/lib/api";
 
-export async function register(email: string, password: string, name?: string) {
-    const r = await apiFetch("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({ email, password, name }),
-    }, false);
-    const data = await r.json();
-    if (!r.ok) throw new Error(data?.error ?? "Falha no cadastro");
-    return data.user;
+export type AuthResponse = {
+    user: { id: string; email: string };
+    accessToken: string;
+    refreshToken: string;
+};
+
+export async function register(email: string, password: string): Promise<AuthResponse> {
+    return await postJSON<AuthResponse>("/auth/register", { email, password, name: email });
 }
 
-export async function login(email: string, password: string) {
-    const r = await apiFetch("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-    }, false);
-    const data = await r.json();
-    if (!r.ok) throw new Error(data?.error ?? "Falha no login");
-    await tokenStore.setTokens(data.tokens.accessToken, data.tokens.refreshToken);
-    return data.user as { id: string; email: string; name?: string; profileReady?: boolean; kaizoo?: string | null };
+export async function login(email: string, password: string): Promise<AuthResponse> {
+    return await postJSON<AuthResponse>("/auth/login", { email, password });
 }
 
-export async function me() {
-    const r = await apiFetch("/auth/me");
-    const data = await r.json();
-    if (!r.ok) throw new Error(data?.error ?? "Falha ao obter perfil");
-    return data.user;
-}
-
-export async function logout() {
-    const refresh = await tokenStore.getRefresh();
-    if (refresh) {
-        await apiFetch("/auth/logout", {
-            method: "POST",
-            body: JSON.stringify({ refreshToken: refresh }),
-        }, false);
-    }
-    await tokenStore.clearTokens();
+// opcional: se você tiver endpoint de logout no backend, pode chamar aqui.
+// export async function logout(): Promise<void> { ... }
+export async function logout(): Promise<void> {
+    // seu backend não precisa; limpar tokens no client já basta.
+    return;
 }

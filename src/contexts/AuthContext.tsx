@@ -1,163 +1,105 @@
-// src/contexts/AuthContext.tsx
-import { apiFetch, tokenStore } from "@/services/api";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import { wireTokenHandlers } from "@/lib/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import * as Auth from "../services/auth";
+import { getProfile } from "../services/profile";
 
-export type MascotKey = "tato" | "dino" | "koa" | "kaia" | "penny";
+type User = { id: string; email: string } | null;
 
-export type User = {
-    id: string;
-    name?: string;
-    email: string;
-    profileReady?: boolean;
-    kaizoo?: MascotKey | null;
-    mascot?: MascotKey | null;
-};
-
-type AuthContextType = {
-    user: User | null;
-    booting: boolean;
-    login: (email: string, password: string) => Promise<void>;
+type AuthCtx = {
+    user: User;
+    loading: boolean;
     register: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<void>;
+    logout: () => Promise<void>;
     signOut: () => Promise<void>;
-    refreshProfile: () => Promise<void>;
-    replaceUser: (u: User | null) => void; // ← para setar user direto (ex.: finishOnboarding retorna user)
-    // aliases p/ telas antigas
-    signIn?: (email: string, password: string) => Promise<void>;
-    signUp?: (email: string, password: string) => Promise<void>;
-    logout?: () => Promise<void>;
+    refreshMe: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextType>({} as any);
+const Ctx = createContext<AuthCtx>(null as any);
 
-// Aceita vários formatos de payload p/ tokens
-function extractTokens(data: any) {
-    const at =
-        data?.accessToken ??
-        data?.access ??
-        data?.token ??
-        data?.jwt?.access ??
-        data?.tokens?.accessToken ??
-        data?.session?.accessToken;
-
-    const rt =
-        data?.refreshToken ??
-        data?.refresh ??
-        data?.jwt?.refresh ??
-        data?.tokens?.refreshToken ??
-        data?.session?.refreshToken;
-
-    return { at, rt };
-}
+const ACCESS_KEY = "@kaizoo/access_token";
+const REFRESH_KEY = "@kaizoo/refresh_token";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<User | null>(null);
-    const [booting, setBooting] = useState(true);
+    const [user, setUser] = useState<User>(null);
+    const [loading, setLoading] = useState(true);
 
-    // Recupera sessão ao abrir o app
+    // conecta api.ts com o storage
+    wireTokenHandlers({
+        getAccessToken: async () => AsyncStorage.getItem(ACCESS_KEY),
+        getRefreshToken: async () => AsyncStorage.getItem(REFRESH_KEY),
+        setAccessToken: async (t) => AsyncStorage.setItem(ACCESS_KEY, t),
+        setRefreshToken: async (t) => AsyncStorage.setItem(REFRESH_KEY, t),
+        clearTokens: async () => {
+            await AsyncStorage.multiRemove([ACCESS_KEY, REFRESH_KEY]);
+            setUser(null);
+        },
+    });
+
     useEffect(() => {
         (async () => {
             try {
-                const r = await apiFetch("/me");
-                const data = await r.json().catch(() => ({}));
-                if (r.ok && data?.user) setUser(data.user as User);
-                else setUser(null);
-            } catch {
-                setUser(null);
+                const at = await AsyncStorage.getItem(ACCESS_KEY);
+                const rt = await AsyncStorage.getItem(REFRESH_KEY);
+                if (at && rt) {
+                    const me = await getProfile().catch(() => null as any);
+                    if (me?.id && me?.email) {
+                        setUser({ id: String(me.id), email: String(me.email) });
+                    }
+                }
             } finally {
-                setBooting(false);
+                setLoading(false);
             }
         })();
     }, []);
 
-    async function refreshProfile() {
-        const r = await apiFetch("/me");
-        let data: any = null;
+    const logout = async () => {
         try {
-            data = await r.json();
-        } catch {
-            // ok se não vier corpo
-        }
-        if (!r.ok) {
-            console.warn("GET /me falhou:", r.status, data?.error ?? data);
-            return; // não lança erro
-        }
-        setUser(data?.user as User);
-    }
+            await Auth.logout();
+        } catch { }
+        await AsyncStorage.multiRemove([ACCESS_KEY, REFRESH_KEY]);
+        setUser(null);
+    };
 
-    async function doLogin(email: string, password: string) {
-        const r = await apiFetch("/auth/login", {
-            method: "POST",
-            body: JSON.stringify({ email, password }),
-        });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(data?.error ?? "Falha no login");
+    const signOut = logout; // alias
 
-        const { at, rt } = extractTokens(data);
-        if (at && rt) await tokenStore.setTokens(at, rt);
-
-        if (data?.user) setUser(data.user as User);
-        else await refreshProfile();
-    }
-
-    async function login(email: string, password: string) {
-        await doLogin(email, password);
-    }
-
-    async function register(email: string, password: string) {
-        const r = await apiFetch("/auth/register", {
-            method: "POST",
-            body: JSON.stringify({ email, password }),
-        });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(data?.error ?? "Falha ao criar conta");
-
-        const { at, rt } = extractTokens(data);
-        if (at && rt) {
-            await tokenStore.setTokens(at, rt);
-            if (data?.user) setUser(data.user as User);
-            else await refreshProfile();
-        } else {
-            // se o register não mandar tokens, faz login automático
-            await doLogin(email, password);
-        }
-    }
-
-    async function signOut() {
-        try {
-            await apiFetch("/auth/logout", { method: "POST" });
-        } catch {
-            // ignore
-        } finally {
-            await tokenStore.clearTokens();
-            setUser(null);
-        }
-    }
-
-    function replaceUser(u: User | null) {
-        setUser(u);
-    }
-
-    return (
-        <AuthContext.Provider
-            value={{
-                user,
-                booting,
-                login,
-                register,
-                signOut,
-                refreshProfile,
-                replaceUser,
-                // aliases
-                signIn: login,
-                signUp: register,
-                logout: signOut,
-            }}
-        >
-            {children}
-        </AuthContext.Provider>
+    const value = useMemo<AuthCtx>(
+        () => ({
+            user,
+            loading,
+            register: async (email, password) => {
+                const res = await Auth.register(email, password);
+                await AsyncStorage.setItem(ACCESS_KEY, String(res.accessToken ?? ""));
+                await AsyncStorage.setItem(REFRESH_KEY, String(res.refreshToken ?? ""));
+                setUser({
+                    id: String(res.user?.id ?? ""),
+                    email: String(res.user?.email ?? ""),
+                });
+            },
+            login: async (email, password) => {
+                const res = await Auth.login(email, password);
+                await AsyncStorage.setItem(ACCESS_KEY, String(res.accessToken ?? ""));
+                await AsyncStorage.setItem(REFRESH_KEY, String(res.refreshToken ?? ""));
+                setUser({
+                    id: String(res.user?.id ?? ""),
+                    email: String(res.user?.email ?? ""),
+                });
+            },
+            logout,
+            signOut,
+            refreshMe: async () => {
+                const me = await getProfile();
+                setUser({
+                    id: String(me?.id ?? ""),
+                    email: String(me?.email ?? ""),
+                });
+            },
+        }),
+        [user, loading]
     );
+
+    return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-export function useAuth() {
-    return useContext(AuthContext);
-}
+export const useAuth = () => useContext(Ctx);

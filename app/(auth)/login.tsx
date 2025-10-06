@@ -1,7 +1,9 @@
+// app/(auth)/login.tsx
 import Button from "@/components/atoms/Button";
+import Input from "@/components/atoms/Input";
 import Text from "@/components/atoms/Text";
 import { useAuth } from "@/contexts/AuthContext";
-import { colors, spacing } from "@/theme";
+import { spacing } from "@/theme";
 import { useNavigation, useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
@@ -29,7 +31,7 @@ export default function LoginScreen() {
     const passRef = useRef<TextInput>(null);
 
     const safeBack = () => {
-        if (navigation?.canGoBack?.()) navigation.goBack();
+        if ("canGoBack" in navigation && navigation.canGoBack()) navigation.goBack();
         else router.replace("/onboarding");
     };
 
@@ -41,7 +43,7 @@ export default function LoginScreen() {
             await login(email.trim(), pass);
             router.replace("/");
         } catch (e: any) {
-            Alert.alert("Erro ao entrar", e.message ?? String(e));
+            Alert.alert("Erro ao entrar", e?.message ?? String(e));
         } finally {
             setLoading(false);
         }
@@ -74,9 +76,8 @@ export default function LoginScreen() {
                             </View>
 
                             <View style={styles.formBlock}>
-                                <TextInput
+                                <Input
                                     placeholder="e-mail"
-                                    placeholderTextColor="#6B6B6B"
                                     value={email}
                                     onChangeText={setEmail}
                                     autoCapitalize="none"
@@ -87,13 +88,11 @@ export default function LoginScreen() {
                                     returnKeyType="next"
                                     blurOnSubmit={false}
                                     onSubmitEditing={() => passRef.current?.focus()}
-                                    style={styles.input}
                                 />
 
-                                <TextInput
+                                <Input
                                     ref={passRef}
                                     placeholder="senha"
-                                    placeholderTextColor="#6B6B6B"
                                     value={pass}
                                     onChangeText={setPass}
                                     secureTextEntry
@@ -101,7 +100,6 @@ export default function LoginScreen() {
                                     autoComplete="password"
                                     returnKeyType="done"
                                     onSubmitEditing={onLogin}
-                                    style={styles.input}
                                 />
                             </View>
 
@@ -128,7 +126,6 @@ export default function LoginScreen() {
                                 accessibilityLabel="Criar conta"
                             />
                             <View style={{ height: spacing.xs }} />
-
                         </View>
                     </View>
                 </TouchableWithoutFeedback>
@@ -170,13 +167,4 @@ const styles = StyleSheet.create({
     },
 
     title: { color: "white", textAlign: "center", marginBottom: spacing.md },
-
-    input: {
-        height: 56,
-        borderRadius: 28,
-        paddingHorizontal: spacing.lg,
-        backgroundColor: colors.gray?.[200] ?? "#EDEDED",
-        color: "#111",
-        alignSelf: "stretch",
-    },
 });

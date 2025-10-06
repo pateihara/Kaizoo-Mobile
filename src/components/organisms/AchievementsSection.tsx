@@ -1,3 +1,4 @@
+//src/components/organisms/AchievementsSection.tsx
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import { colors, spacing } from "@/theme";

@@ -1,17 +1,18 @@
 // app/kaizoo/success.tsx
+import { useRouter } from "expo-router";
+import React from "react";
+import { Image, StyleSheet, View } from "react-native";
+
 import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
 import { colors, radius, spacing } from "@/theme";
-import { useRouter } from "expo-router";
-import React from "react";
-import { Image, StyleSheet, View } from "react-native"; // 👈 adiciona Image aqui
 
 export default function KaizooSuccess() {
     const router = useRouter();
 
     const start = () => {
-        // lembre-se: não use /(tabs), use a rota real ("/" ou "/home")
-        router.replace("/");
+        // vá para as tabs (ajuste se sua home for outra)
+        router.replace("/(tabs)");
     };
 
     return (
@@ -24,7 +25,6 @@ export default function KaizooSuccess() {
 
             <View style={{ padding: spacing.lg }}>
                 <View style={styles.card}>
-                    {/* ilustração */}
                     <View style={[styles.illusPlaceholder, { height: 220 }]}>
                         <Image
                             source={require("assets/images/allTogether.png")}
@@ -32,16 +32,10 @@ export default function KaizooSuccess() {
                         />
                     </View>
 
-                    <Text
-                        variant="title"
-                        weight="bold"
-                        style={{ textAlign: "center", marginTop: spacing.lg }}
-                    >
+                    <Text variant="title" weight="bold" style={{ textAlign: "center", marginTop: spacing.lg }}>
                         tudo pronto!
                     </Text>
-                    <Text
-                        style={{ textAlign: "center", fontSize: 18, marginTop: spacing.xs }}
-                    >
+                    <Text style={{ textAlign: "center", fontSize: 18, marginTop: spacing.xs }}>
                         Seu perfil foi configurado com sucesso!
                     </Text>
                 </View>

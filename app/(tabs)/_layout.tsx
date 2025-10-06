@@ -1,43 +1,49 @@
 // app/(tabs)/_layout.tsx
-import { useAuth } from "@/contexts/AuthContext";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect } from "@react-navigation/native";
-import { Redirect, Tabs } from "expo-router";
-import React from "react";
-import { ActivityIndicator, View } from "react-native";
-
-const AUTH_ROUTE = "/login";
-const HOME_ROUTE = "/";
+import { colors } from "@/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 
 export default function TabsLayout() {
-  const { user } = useAuth();
-  const [ready, setReady] = React.useState(false);
-  const [profileReady, setProfileReady] = React.useState(false);
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.black,
+        tabBarInactiveTintColor: "#777",
+      }}
+    >
+      {/* Home/Dashboard */}
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Início",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" color={color} size={size} />
+          ),
+        }}
+      />
 
-  const loadFlag = React.useCallback(async () => {
-    const pr = await AsyncStorage.getItem("profile:ready");
-    setProfileReady(pr === "1");
-    setReady(true);
-  }, []);
+      {/* Comunidade (sua tela de feed) */}
+      <Tabs.Screen
+        name="comunidade"
+        options={{
+          title: "Comunidade",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-outline" color={color} size={size} />
+          ),
+        }}
+      />
 
-  React.useEffect(() => { loadFlag(); }, [loadFlag]);
-  useFocusEffect(React.useCallback(() => { loadFlag(); }, [loadFlag]));
-
-  if (!ready) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "black" }}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
-  if (!user) {
-    return <Redirect href={AUTH_ROUTE} />;
-  }
-
-  if (!profileReady) {
-    return <Redirect href="/kaizoo/select" />;
-  }
-
-  return <Tabs screenOptions={{ headerShown: false }} />;
+      {/* Perfil */}
+      <Tabs.Screen
+        name="perfil"
+        options={{
+          title: "Perfil",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-circle-outline" color={color} size={size} />
+          ),
+        }}
+      />
+    </Tabs>
+  );
 }

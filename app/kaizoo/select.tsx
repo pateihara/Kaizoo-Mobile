@@ -1,9 +1,4 @@
 // app/kaizoo/select.tsx
-import Button from "@/components/atoms/Button";
-import Text from "@/components/atoms/Text";
-import { useAuth } from "@/contexts/AuthContext";
-import { finishOnboarding } from "@/services/profile";
-import { colors, radius, spacing } from "@/theme";
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
@@ -20,6 +15,12 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import Button from "@/components/atoms/Button";
+import Text from "@/components/atoms/Text";
+import { useAuth } from "@/contexts/AuthContext";
+import { finishOnboarding } from "@/services/profile";
+import { colors, radius, spacing } from "@/theme";
 
 import frontdino from "assets/images/card-dino.png";
 import frontkaia from "assets/images/card-kaia.png";
@@ -125,10 +126,7 @@ const MASCOTS: Mascot[] = [
                 { label: "Otimista", score: 5 },
                 { label: "Ativa", score: 5 },
             ],
-            goals: [
-                "Melhorar o condicionamento físico.",
-                "Aliviar o estresse do trabalho com atividades prazerosas.",
-            ],
+            goals: ["Melhorar o condicionamento físico.", "Aliviar o estresse do trabalho com atividades prazerosas."],
         },
     },
     {
@@ -149,9 +147,14 @@ const MASCOTS: Mascot[] = [
     },
 ];
 
-export default function SelectKaizoo() {
+export default function KaizooSelect() {
     const router = useRouter();
-    const { refreshProfile, replaceUser } = useAuth();
+
+    const { refreshProfile, replaceUser } = useAuth() as {
+        refreshProfile?: () => Promise<void>;
+        replaceUser?: (u: any) => void;
+    };
+
     const listRef = useRef<FlatList<Mascot>>(null);
     const [index, setIndex] = useState(0);
     const [saving, setSaving] = useState(false);
@@ -195,9 +198,12 @@ export default function SelectKaizoo() {
         const sel = MASCOTS[index];
 
         try {
-            const updatedUser = await finishOnboarding(sel.key);
-            if (updatedUser) replaceUser(updatedUser);
-            else await refreshProfile();
+            const updatedProfile = await finishOnboarding(sel.key as MascotKey);
+            if (updatedProfile && typeof replaceUser === "function") {
+                replaceUser(updatedProfile as any);
+            } else if (typeof refreshProfile === "function") {
+                await refreshProfile();
+            }
             router.replace(NEXT_ROUTE);
         } catch (e: any) {
             const msg = e?.data?.error ?? e?.message ?? "Falha ao concluir onboarding";
@@ -240,7 +246,9 @@ export default function SelectKaizoo() {
                                         )}
 
                                         <View style={styles.cardTitleBand}>
-                                            <Text weight="bold" style={styles.cardTitle}>{item.title}</Text>
+                                            <Text weight="bold" style={styles.cardTitle}>
+                                                {item.title}
+                                            </Text>
                                             <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
                                         </View>
 
@@ -249,9 +257,7 @@ export default function SelectKaizoo() {
                                         </View>
                                     </Animated.View>
 
-                                    <Animated.View
-                                        style={[styles.faceBack, { transform: [{ perspective: 1000 }, { rotateY: backRot }] }]}
-                                    >
+                                    <Animated.View style={[styles.faceBack, { transform: [{ perspective: 1000 }, { rotateY: backRot }] }]}>
                                         {!!item.backImage && (
                                             <Image source={item.backImage} style={styles.badge} resizeMode="contain" accessible={false} />
                                         )}
@@ -259,14 +265,18 @@ export default function SelectKaizoo() {
                                         <ScrollView contentContainerStyle={{ paddingBottom: spacing.lg }}>
                                             {!!item.personality?.favorite && (
                                                 <View style={{ marginBottom: spacing.md }}>
-                                                    <Text weight="bold" style={styles.sectionTitle}>ATIVIDADE FAVORITA</Text>
+                                                    <Text weight="bold" style={styles.sectionTitle}>
+                                                        ATIVIDADE FAVORITA
+                                                    </Text>
                                                     <Text style={styles.sectionBody}>{item.personality.favorite}</Text>
                                                 </View>
                                             )}
 
                                             {!!item.personality?.traits?.length && (
                                                 <View style={{ marginBottom: spacing.md }}>
-                                                    <Text weight="bold" style={styles.sectionTitle}>PERSONALIDADE</Text>
+                                                    <Text weight="bold" style={styles.sectionTitle}>
+                                                        PERSONALIDADE
+                                                    </Text>
                                                     <View style={{ rowGap: 10 }}>
                                                         {item.personality.traits!.map((t, i) => (
                                                             <View key={i} style={styles.traitRow}>
@@ -280,7 +290,9 @@ export default function SelectKaizoo() {
 
                                             {!!item.personality?.goals?.length && (
                                                 <View style={{ marginBottom: spacing.md }}>
-                                                    <Text weight="bold" style={styles.sectionTitle}>OBJETIVOS</Text>
+                                                    <Text weight="bold" style={styles.sectionTitle}>
+                                                        OBJETIVOS
+                                                    </Text>
                                                     <View style={{ rowGap: 8 }}>
                                                         {item.personality.goals!.map((g, i) => (
                                                             <View key={i} style={styles.goalRow}>
@@ -295,13 +307,7 @@ export default function SelectKaizoo() {
                                             )}
                                         </ScrollView>
 
-                                        <Button
-                                            variant="secondary"
-                                            label="ver imagem"
-                                            onPress={toggleFlip}
-                                            fullWidth
-                                            style={{ marginTop: spacing.md }}
-                                        />
+                                        <Button variant="secondary" label="ver imagem" onPress={toggleFlip} fullWidth style={{ marginTop: spacing.md }} />
                                     </Animated.View>
                                 </View>
                             </View>
@@ -318,13 +324,7 @@ export default function SelectKaizoo() {
                         loading={saving}
                         disabled={saving}
                     />
-                    <Button
-                        variant="onboardingOutline"
-                        label="ver o próximo!"
-                        onPress={goNext}
-                        fullWidth
-                        disabled={saving}
-                    />
+                    <Button variant="onboardingOutline" label="ver o próximo!" onPress={goNext} fullWidth disabled={saving} />
                 </View>
             </View>
         </SafeAreaView>
@@ -335,7 +335,9 @@ function Step({ title }: { title: string }) {
     return (
         <View style={{ padding: spacing.lg, paddingTop: spacing.xl }}>
             <View style={styles.stepPill}>
-                <Text weight="bold" style={{ textAlign: "center" }}>{title}</Text>
+                <Text weight="bold" style={{ textAlign: "center" }}>
+                    {title}
+                </Text>
             </View>
         </View>
     );
@@ -369,7 +371,7 @@ const styles = StyleSheet.create({
 
     card: {
         backgroundColor: "white",
-        borderRadius: radius.lg ?? 16,
+        borderRadius: radius?.lg ?? 16,
         overflow: "hidden",
         marginHorizontal: spacing.lg,
         height: CARD_HEIGHT,
@@ -396,7 +398,7 @@ const styles = StyleSheet.create({
     cardTitle: { color: "white", fontSize: 22, textAlign: "center" },
     cardSubtitle: { color: "white", opacity: 0.9, textAlign: "center" },
 
-    heroPlaceholder: { backgroundColor: colors.gray?.[200] ?? "#eee" },
+    heroPlaceholder: { backgroundColor: colors?.gray?.[200] ?? "#eee" },
 
     overlayBtn: {
         position: "absolute",
@@ -413,14 +415,7 @@ const styles = StyleSheet.create({
     traitLabel: { fontSize: 16 },
 
     goalRow: { flexDirection: "row", alignItems: "center", columnGap: 10 },
-    goalCheck: {
-        width: 22,
-        height: 22,
-        borderRadius: 22,
-        borderWidth: 2,
-        alignItems: "center",
-        justifyContent: "center",
-    },
+    goalCheck: { width: 22, height: 22, borderRadius: 22, borderWidth: 2, alignItems: "center", justifyContent: "center" },
     goalCheckMark: { fontSize: 14, fontWeight: "700" },
 
     dot: { width: 16, height: 16, borderRadius: 999 },

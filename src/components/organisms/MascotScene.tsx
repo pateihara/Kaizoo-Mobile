@@ -1,3 +1,4 @@
+// //src/components/organisms/MascotScene.tsx
 import { useEffect, useRef } from "react";
 import { Animated, Easing, ImageBackground, StyleSheet } from "react-native";
 
