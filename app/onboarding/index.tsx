@@ -1,7 +1,7 @@
 // app/onboarding/index.tsx
 import { colors, radius, spacing } from "@/theme";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
     Dimensions,
     FlatList,

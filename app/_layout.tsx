@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 
 import { ActivityProvider } from "@/contexts/ActivityContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import React from "react";
 
 // evita sumir antes da hora
 SplashScreen.preventAutoHideAsync().catch(() => { });

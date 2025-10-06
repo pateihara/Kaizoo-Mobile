@@ -3,6 +3,7 @@ import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import ActivityChip from "@/components/molecules/ActivityChip";
 import { spacing } from "@/theme";
+import React from "react";
 import { View } from "react-native";
 
 const MOCK_ACTIVITIES = [

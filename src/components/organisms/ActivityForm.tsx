@@ -1,6 +1,6 @@
 // //src/components/organisms/ActivityForm.tsx
 import { colors, spacing } from "@/theme";
-import { useState } from "react";
+import React, { useState } from "react";
 import { TextInput } from "react-native";
 import Button from "../atoms/Button";
 import Card from "../atoms/Card";

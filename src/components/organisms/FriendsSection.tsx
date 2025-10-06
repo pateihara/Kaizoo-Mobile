@@ -3,6 +3,7 @@ import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import FriendAvatar from "@/components/molecules/FriendAvatar";
 import { spacing } from "@/theme";
+import React from "react";
 import { View } from "react-native";
 
 const FRIENDS = ["dino", "kaia", "penny", "tato", "koa"] as const;

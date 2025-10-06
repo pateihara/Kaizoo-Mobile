@@ -1,5 +1,5 @@
 // app/teste-health.tsx
-import { api } from "@/lib/api";
+import { http } from "@/lib/api";
 import React, { useState } from "react";
 import { Button, Text, View } from "react-native";
 
@@ -8,7 +8,7 @@ export default function TesteHealth() {
 
     const ping = async () => {
         try {
-            const r = await api.get("/health");
+            const r = await http.get("/health");
             setOut(JSON.stringify(r.data));
         } catch (e: any) {
             setOut(e?.message || "falha");

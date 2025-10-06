@@ -9,6 +9,7 @@ import { Share, StyleSheet, View } from "react-native";
 
 import { BG, transp } from "@/assets"; // <- sem barra no final
 import type { MascotKey } from "@/services/profile";
+import React from "react";
 
 type Props = {
     name?: string;
