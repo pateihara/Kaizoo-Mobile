@@ -1,5 +1,5 @@
 // src/services/challenges.ts
-import { api } from "@/lib/api";
+import { http } from "@/lib/api";
 import type { AxiosError } from "axios";
 
 export type Intensity = "low" | "medium" | "high";
@@ -36,12 +36,12 @@ export type Activity = {
 };
 
 export async function listChallenges(status: "active" | "completed" = "active"): Promise<Challenge[]> {
-    const { data } = await api.get<Challenge[]>("/challenges", { params: { status } });
+    const { data } = await http.get<Challenge[]>("/challenges", { params: { status } });
     return Array.isArray(data) ? data : [];
 }
 
 export async function listCommunityEvents(): Promise<CommunityEvent[]> {
-    const { data } = await api.get<CommunityEvent[]>("/challenges/events");
+    const { data } = await http.get<CommunityEvent[]>("/challenges/events");
     return Array.isArray(data) ? data : [];
 }
 
@@ -68,7 +68,7 @@ export async function joinChallengeEvent(
     };
 
     try {
-        const { data } = await api.post<Challenge>("/challenges/events/join", body);
+        const { data } = await http.post<Challenge>("/challenges/events/join", body);
         return data;
     } catch (e: any) {
         const ax = e as AxiosError<any>;
@@ -86,7 +86,7 @@ export async function completeChallengeServer(id: string): Promise<{
     completedAdded: Challenge;
     createdActivity?: Activity;
 }> {
-    const { data } = await api.post<{
+    const { data } = await http.post<{
         activeRemovedId: string;
         completedAdded: Challenge;
         createdActivity?: Activity;
@@ -101,7 +101,7 @@ export async function activateAvailableChallenge(src: {
     metricIntensity?: Intensity; metricCalories?: number;
 }): Promise<Challenge> {
     // o back valida com zod (baseSchema), então mandamos só os campos suportados
-    const { data } = await api.post<Challenge>("/challenges/available/activate", {
+    const { data } = await http.post<Challenge>("/challenges/available/activate", {
         id: src.id,
         title: src.title,
         description: src.description,
@@ -118,6 +118,6 @@ export async function activateAvailableChallenge(src: {
 }
 
 export async function listAvailableChallenges(): Promise<Challenge[]> {
-    const { data } = await api.get<Challenge[]>("/challenges/available");
+    const { data } = await http.get<Challenge[]>("/challenges/available");
     return Array.isArray(data) ? data : [];
 }

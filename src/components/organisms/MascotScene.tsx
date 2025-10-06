@@ -1,5 +1,5 @@
 // //src/components/organisms/MascotScene.tsx
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { Animated, Easing, ImageBackground, StyleSheet } from "react-native";
 
 // ... seus imports e mapeamentos (BG_BY_MASCOT, CHAR_BY_MASCOT) ...

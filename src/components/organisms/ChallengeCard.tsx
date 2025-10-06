@@ -3,6 +3,7 @@ import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import ProgressBar from "@/components/molecules/ProgressBar";
 import { colors, spacing } from "@/theme";
+import React from "react";
 
 const MOCK_CHALLENGE = {
     label: "Meta: 10km corridos",

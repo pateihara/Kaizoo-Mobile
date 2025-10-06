@@ -2,6 +2,7 @@
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import { colors, spacing } from "@/theme";
+import React from "react";
 
 export default function AchievementsSection() {
     return (

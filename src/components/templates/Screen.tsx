@@ -1,6 +1,6 @@
 //src/components/templates/Screen.tsx
 import { colors, spacing } from "@/theme";
-import { ReactNode } from "react";
+import React, { ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 

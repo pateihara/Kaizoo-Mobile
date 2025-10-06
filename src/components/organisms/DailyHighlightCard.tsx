@@ -2,6 +2,7 @@
 import Card from "@/components/atoms/Card";
 import Text from "@/components/atoms/Text";
 import { colors, spacing } from "@/theme";
+import React from "react";
 
 const MOCK_HIGHLIGHT = "Hoje o seu Kaizoo quer se movimentar por 15 minutos!";
 
