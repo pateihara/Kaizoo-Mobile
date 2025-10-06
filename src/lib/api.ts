@@ -3,34 +3,35 @@ import axios, { AxiosError, AxiosRequestConfig } from "axios";
 import { Platform } from "react-native";
 
 /**
- * Base URL:
- * - Defina EXPO_PUBLIC_API_URL para celular físico (ex.: http://192.168.15.15:4000)
- * - Emulador Android: http://10.0.2.2:4000
- * - iOS Simulator:    http://127.0.0.1:4000
+ * Defina no .env quando for usar backend remoto:
+ *   EXPO_PUBLIC_API_URL=https://kaizoo-backend.onrender.com
+ *
+ * Em dev local (sem env), cai no guessBaseURL:
+ *   - Android emulator: http://10.0.2.2:4000
+ *   - iOS simulator:    http://127.0.0.1:4000
  */
 const guessBaseURL =
-    Platform.OS === "ios"
-        ? "http://127.0.0.1:4000"
-        : "http://10.0.2.2:4000";
+    Platform.OS === "ios" ? "http://127.0.0.1:4000" : "http://10.0.2.2:4000";
 
-const baseURL =
+export const baseURL =
     process.env.EXPO_PUBLIC_API_URL ??
     process.env.VITE_API_URL ??
     guessBaseURL;
 
-export const api = axios.create({
+// ------------ AXIOS CLIENT ------------
+export const http = axios.create({
     baseURL,
     timeout: 15000,
 });
 
 // --------- LOG de requests/respostas (diagnóstico) ----------
-api.interceptors.request.use((cfg) => {
+http.interceptors.request.use((cfg) => {
     const fullUrl = (cfg.baseURL ?? "") + (cfg.url ?? "");
     console.log("[HTTP] ->", cfg.method?.toUpperCase(), fullUrl);
     return cfg;
 });
 
-api.interceptors.response.use(
+http.interceptors.response.use(
     (res) => {
         const fullUrl = (res.config.baseURL ?? "") + (res.config.url ?? "");
         console.log("[HTTP] <-", res.status, fullUrl);
@@ -65,7 +66,7 @@ export function wireTokenHandlers(handlers: {
 }
 
 // ---- Authorization header on each request ----
-api.interceptors.request.use(async (config) => {
+http.interceptors.request.use(async (config) => {
     if (getAccessToken) {
         const token = await getAccessToken();
         if (token) {
@@ -78,7 +79,6 @@ api.interceptors.request.use(async (config) => {
 
 // ---- Auto refresh on 401 ----
 type RetriableConfig = AxiosRequestConfig & { _retry?: boolean };
-
 let refreshing: Promise<string | null> | null = null;
 
 async function refreshAccess(): Promise<string | null> {
@@ -101,7 +101,7 @@ async function refreshAccess(): Promise<string | null> {
     }
 }
 
-api.interceptors.response.use(
+http.interceptors.response.use(
     (r) => r,
     async (err: AxiosError) => {
         const original = err.config as RetriableConfig | undefined;
@@ -117,7 +117,7 @@ api.interceptors.response.use(
             if (newAT) {
                 original.headers = original.headers ?? {};
                 (original.headers as any).Authorization = `Bearer ${newAT}`;
-                return api(original);
+                return http(original);
             } else {
                 if (clearTokens) await clearTokens();
             }
@@ -128,14 +128,29 @@ api.interceptors.response.use(
 );
 
 // --------- Helpers ----------
-export async function getJSON<T>(path: string): Promise<T> {
-    const res = await api.get<T>(path);
+export async function getJSON<T>(path: string, params?: any): Promise<T> {
+    const res = await http.get<T>(path, { params });
     return res.data;
 }
 
 export async function postJSON<T>(path: string, body: any): Promise<T> {
-    const res = await api.post<T>(path, body);
+    const res = await http.post<T>(path, body);
     return res.data;
 }
 
-// console.log("API baseURL >>>", api.defaults.baseURL);
+export async function putJSON<T>(path: string, body: any): Promise<T> {
+    const res = await http.put<T>(path, body);
+    return res.data;
+}
+
+export async function patchJSON<T>(path: string, body: any): Promise<T> {
+    const res = await http.patch<T>(path, body);
+    return res.data;
+}
+
+export async function del<T>(path: string): Promise<T> {
+    const res = await http.delete<T>(path);
+    return res.data;
+}
+
+// console.log("API baseURL >>>", http.defaults.baseURL);

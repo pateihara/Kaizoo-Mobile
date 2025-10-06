@@ -1,6 +1,6 @@
+import { wireTokenHandlers } from "@/lib/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { wireTokenHandlers } from "../lib/api";
 import * as Auth from "../services/auth";
 import { getProfile } from "../services/profile";
 

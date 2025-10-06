@@ -1,9 +1,9 @@
 // app/index.tsx
 import { useAuth } from "@/contexts/AuthContext";
-import { api } from "@/lib/api";
+import { http } from "@/lib/api";
 import { Redirect } from "expo-router";
 
-console.log("API baseURL >>>", api.defaults.baseURL);
+console.log("API baseURL >>>", http.defaults.baseURL);
 
 export default function Index() {
     const { user } = useAuth();
