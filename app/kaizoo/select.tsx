@@ -1,4 +1,5 @@
 // app/kaizoo/select.tsx
+// app/kaizoo/select.tsx
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
@@ -22,6 +23,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { finishOnboarding } from "@/services/profile";
 import { colors, radius, spacing } from "@/theme";
 
+// ⚠️ IMPORTS RELATIVOS PARA WEB/VERCEL
 import frontdino from "../../assets/images/card-dino.png";
 import frontkaia from "../../assets/images/card-kaia.png";
 import frontkoa from "../../assets/images/card-koa.png";
@@ -126,7 +128,10 @@ const MASCOTS: Mascot[] = [
                 { label: "Otimista", score: 5 },
                 { label: "Ativa", score: 5 },
             ],
-            goals: ["Melhorar o condicionamento físico.", "Aliviar o estresse do trabalho com atividades prazerosas."],
+            goals: [
+                "Melhorar o condicionamento físico.",
+                "Aliviar o estresse do trabalho com atividades prazerosas.",
+            ],
         },
     },
     {
@@ -150,6 +155,7 @@ const MASCOTS: Mascot[] = [
 export default function KaizooSelect() {
     const router = useRouter();
 
+    // alguns apps nomeiam diferente; deixei "opcional" pra não quebrar tipagem
     const { refreshProfile, replaceUser } = useAuth() as {
         refreshProfile?: () => Promise<void>;
         replaceUser?: (u: any) => void;
@@ -235,6 +241,7 @@ export default function KaizooSelect() {
                         renderItem={({ item }) => (
                             <View style={{ width }}>
                                 <View style={styles.card}>
+                                    {/* frente */}
                                     <Animated.View
                                         style={[styles.faceFront, { transform: [{ perspective: 1000 }, { rotateY: frontRot }] }]}
                                         accessibilityLabel={`Imagem do mascote ${item.title}`}
@@ -257,6 +264,7 @@ export default function KaizooSelect() {
                                         </View>
                                     </Animated.View>
 
+                                    {/* verso */}
                                     <Animated.View style={[styles.faceBack, { transform: [{ perspective: 1000 }, { rotateY: backRot }] }]}>
                                         {!!item.backImage && (
                                             <Image source={item.backImage} style={styles.badge} resizeMode="contain" accessible={false} />
@@ -415,7 +423,14 @@ const styles = StyleSheet.create({
     traitLabel: { fontSize: 16 },
 
     goalRow: { flexDirection: "row", alignItems: "center", columnGap: 10 },
-    goalCheck: { width: 22, height: 22, borderRadius: 22, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+    goalCheck: {
+        width: 22,
+        height: 22,
+        borderRadius: 22,
+        borderWidth: 2,
+        alignItems: "center",
+        justifyContent: "center",
+    },
     goalCheckMark: { fontSize: 14, fontWeight: "700" },
 
     dot: { width: 16, height: 16, borderRadius: 999 },
