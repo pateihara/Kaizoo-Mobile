@@ -1,5 +1,6 @@
 //// @/components/atoms/Divider.tsx
 import { colors, spacing } from "@/theme";
+import React from "react";
 import { View } from "react-native";
 
 export default function Divider() {

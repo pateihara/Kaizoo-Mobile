@@ -2,6 +2,7 @@
 import { bitmapIcons } from "@/assets";
 import Text from "@/components/atoms/Text";
 import { colors, radii, spacing } from "@/theme";
+import React from "react";
 import { Image, View } from "react-native";
 
 type IconSource = keyof typeof bitmapIcons | number | { uri: string };

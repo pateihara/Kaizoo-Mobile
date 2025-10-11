@@ -1,21 +1,20 @@
 // app/kaizoo/select.tsx
-// app/kaizoo/select.tsx
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
     Alert,
     Animated,
-    Dimensions,
     Easing,
     FlatList,
     Image,
     NativeScrollEvent,
     NativeSyntheticEvent,
-    ScrollView,
+    Platform,
     StyleSheet,
     View,
+    useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
@@ -36,14 +35,6 @@ import backkoa from "../../assets/images/StarKoa.png";
 import backpenny from "../../assets/images/StarPenny.png";
 import backtato from "../../assets/images/StarTato.png";
 
-const { width } = Dimensions.get("window");
-
-// 👉 rota após escolher
-const NEXT_ROUTE = "/kaizoo/form";
-
-// 👉 altura fixa do card (a imagem cobre TUDO)
-const CARD_HEIGHT = 560 as const;
-
 type MascotKey = "tato" | "dino" | "koa" | "kaia" | "penny";
 type Mascot = {
     key: MascotKey;
@@ -58,6 +49,7 @@ type Mascot = {
     };
 };
 
+// cores
 const ACCENT: Record<MascotKey, string> = {
     tato: "#F37997",
     dino: "#FFB24A",
@@ -66,6 +58,7 @@ const ACCENT: Record<MascotKey, string> = {
     penny: "#7E7AF5",
 };
 
+// catálogo
 const MASCOTS: Mascot[] = [
     {
         key: "tato",
@@ -152,10 +145,20 @@ const MASCOTS: Mascot[] = [
     },
 ];
 
+// 👉 rota após escolher
+const NEXT_ROUTE = "/kaizoo/form";
+
 export default function KaizooSelect() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
+    const { width: winW, height: winH } = useWindowDimensions();
 
-    // alguns apps nomeiam diferente; deixei "opcional" pra não quebrar tipagem
+    // responsivo: limita largura/altura do card
+    const cardWidth = Math.min(420, Math.max(320, Math.floor(winW * 0.86)));
+    const cardHeight = Math.max(420, Math.min(560, Math.floor(winH * 0.7)));
+
+    const pageWidth = winW; // para snap/scroll
+
     const { refreshProfile, replaceUser } = useAuth() as {
         refreshProfile?: () => Promise<void>;
         replaceUser?: (u: any) => void;
@@ -168,16 +171,42 @@ export default function KaizooSelect() {
     // flip
     const [isBack, setIsBack] = useState(false);
     const flip = useRef(new Animated.Value(0)).current;
-    const frontRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["0deg", "180deg"] });
-    const backRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["180deg", "360deg"] });
+
+    const frontRot = flip.interpolate({
+        inputRange: [0, 180],
+        outputRange: ["0deg", "180deg"],
+    });
+    const backRot = flip.interpolate({
+        inputRange: [0, 180],
+        outputRange: ["180deg", "360deg"],
+    });
+
+    // 👇 extra: controla visibilidade para Web (quando backfaceVisibility não segura)
+    const frontOpacity = flip.interpolate({
+        inputRange: [0, 90, 180],
+        outputRange: [1, 0, 0],
+        extrapolate: "clamp",
+    });
+    const backOpacity = flip.interpolate({
+        inputRange: [0, 90, 180],
+        outputRange: [0, 0, 1],
+        extrapolate: "clamp",
+    });
+
     const animateTo = (deg: number) =>
-        Animated.timing(flip, { toValue: deg, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true });
+        Animated.timing(flip, {
+            toValue: deg,
+            duration: 450,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+        });
 
     const resetFlip = () => {
         setIsBack(false);
         flip.stopAnimation();
         flip.setValue(0);
     };
+
     const toggleFlip = () => {
         if (isBack) animateTo(0).start(() => setIsBack(false));
         else animateTo(180).start(() => setIsBack(true));
@@ -186,17 +215,22 @@ export default function KaizooSelect() {
     const goNext = () => {
         const next = (index + 1) % MASCOTS.length;
         resetFlip();
-        listRef.current?.scrollToIndex({ index: next, animated: true });
+        // usar scrollToOffset para web ser mais sólido
+        listRef.current?.scrollToOffset({ offset: next * pageWidth, animated: true });
         setIndex(next);
     };
 
-    const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-        const i = Math.round(e.nativeEvent.contentOffset.x / width);
-        if (i !== index) {
-            setIndex(i);
-            resetFlip();
-        }
-    };
+    const onScroll = useCallback(
+        (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+            const x = e.nativeEvent.contentOffset.x;
+            const i = Math.round(x / Math.max(1, pageWidth));
+            if (i !== index) {
+                setIndex(i);
+                resetFlip();
+            }
+        },
+        [index, pageWidth]
+    );
 
     const chooseThis = async () => {
         if (saving) return;
@@ -229,25 +263,52 @@ export default function KaizooSelect() {
                 <View style={{ flex: 1 }}>
                     <FlatList
                         ref={listRef}
-                        horizontal
-                        pagingEnabled
-                        bounces={false}
-                        showsHorizontalScrollIndicator={false}
                         data={MASCOTS}
                         keyExtractor={(m) => m.key}
-                        onMomentumScrollEnd={onMomentumEnd}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        // Mobile: paging; Web: snap
+                        pagingEnabled={Platform.OS !== "web"}
+                        snapToInterval={Platform.OS === "web" ? pageWidth : undefined}
+                        snapToAlignment={Platform.OS === "web" ? "start" : undefined}
+                        disableIntervalMomentum={Platform.OS === "web"}
+                        decelerationRate={Platform.OS === "web" ? "fast" : "normal"}
+                        bounces={false}
+                        onScroll={onScroll}
+                        scrollEventThrottle={16}
                         style={{ flex: 1 }}
                         contentContainerStyle={{ paddingVertical: spacing.lg }}
                         renderItem={({ item }) => (
-                            <View style={{ width }}>
-                                <View style={styles.card}>
-                                    {/* frente */}
+                            <View style={{ width: pageWidth, alignItems: "center" }}>
+                                <View
+                                    style={[
+                                        styles.card,
+                                        {
+                                            width: cardWidth,
+                                            height: cardHeight,
+                                        },
+                                    ]}
+                                >
+                                    {/* Frente */}
                                     <Animated.View
-                                        style={[styles.faceFront, { transform: [{ perspective: 1000 }, { rotateY: frontRot }] }]}
+                                        style={[
+                                            styles.faceFront,
+                                            {
+                                                transform: [{ perspective: 1000 }, { rotateY: frontRot }],
+                                                opacity: frontOpacity,
+                                                // RN Web dicas de performance:
+                                                ...(Platform.OS === "web" ? ({ willChange: "transform" } as any) : null),
+                                            },
+                                        ]}
                                         accessibilityLabel={`Imagem do mascote ${item.title}`}
+                                        pointerEvents={isBack ? "none" : "auto"}
                                     >
                                         {item.frontImage ? (
-                                            <Image source={item.frontImage} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                                            <Image
+                                                source={item.frontImage}
+                                                style={StyleSheet.absoluteFillObject}
+                                                resizeMode="cover"
+                                            />
                                         ) : (
                                             <View style={[StyleSheet.absoluteFillObject, styles.heroPlaceholder]} />
                                         )}
@@ -259,20 +320,46 @@ export default function KaizooSelect() {
                                             <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
                                         </View>
 
-                                        <View style={styles.overlayBtn}>
-                                            <Button variant="primary" label="Ver personalidade" onPress={toggleFlip} fullWidth />
+                                        <View
+                                            style={[
+                                                styles.overlayBtn,
+                                                { bottom: insets.bottom + spacing.lg, width: cardWidth - spacing.lg * 2 },
+                                            ]}
+                                        >
+                                            <Button
+                                                variant="primary"
+                                                label="Ver personalidade"
+                                                onPress={toggleFlip}
+                                                fullWidth
+                                            />
                                         </View>
                                     </Animated.View>
 
-                                    {/* verso */}
-                                    <Animated.View style={[styles.faceBack, { transform: [{ perspective: 1000 }, { rotateY: backRot }] }]}>
+                                    {/* Verso */}
+                                    <Animated.View
+                                        style={[
+                                            styles.faceBack,
+                                            {
+                                                transform: [{ perspective: 1000 }, { rotateY: backRot }],
+                                                opacity: backOpacity,
+                                                paddingBottom: insets.bottom + spacing.md,
+                                                ...(Platform.OS === "web" ? ({ willChange: "transform" } as any) : null),
+                                            },
+                                        ]}
+                                        pointerEvents={isBack ? "auto" : "none"}
+                                    >
                                         {!!item.backImage && (
-                                            <Image source={item.backImage} style={styles.badge} resizeMode="contain" accessible={false} />
+                                            <Image
+                                                source={item.backImage}
+                                                style={styles.badge}
+                                                resizeMode="contain"
+                                                accessible={false}
+                                            />
                                         )}
 
-                                        <ScrollView contentContainerStyle={{ paddingBottom: spacing.lg }}>
+                                        <View style={{ rowGap: spacing.md, flexGrow: 1 }}>
                                             {!!item.personality?.favorite && (
-                                                <View style={{ marginBottom: spacing.md }}>
+                                                <View>
                                                     <Text weight="bold" style={styles.sectionTitle}>
                                                         ATIVIDADE FAVORITA
                                                     </Text>
@@ -281,7 +368,7 @@ export default function KaizooSelect() {
                                             )}
 
                                             {!!item.personality?.traits?.length && (
-                                                <View style={{ marginBottom: spacing.md }}>
+                                                <View>
                                                     <Text weight="bold" style={styles.sectionTitle}>
                                                         PERSONALIDADE
                                                     </Text>
@@ -297,15 +384,27 @@ export default function KaizooSelect() {
                                             )}
 
                                             {!!item.personality?.goals?.length && (
-                                                <View style={{ marginBottom: spacing.md }}>
+                                                <View>
                                                     <Text weight="bold" style={styles.sectionTitle}>
                                                         OBJETIVOS
                                                     </Text>
                                                     <View style={{ rowGap: 8 }}>
                                                         {item.personality.goals!.map((g, i) => (
                                                             <View key={i} style={styles.goalRow}>
-                                                                <View style={[styles.goalCheck, { borderColor: accent(item.key) }]}>
-                                                                    <Text style={[styles.goalCheckMark, { color: accent(item.key) }]}>✓</Text>
+                                                                <View
+                                                                    style={[
+                                                                        styles.goalCheck,
+                                                                        { borderColor: accent(item.key) },
+                                                                    ]}
+                                                                >
+                                                                    <Text
+                                                                        style={[
+                                                                            styles.goalCheckMark,
+                                                                            { color: accent(item.key) },
+                                                                        ]}
+                                                                    >
+                                                                        ✓
+                                                                    </Text>
                                                                 </View>
                                                                 <Text style={styles.sectionBody}>{g}</Text>
                                                             </View>
@@ -313,9 +412,15 @@ export default function KaizooSelect() {
                                                     </View>
                                                 </View>
                                             )}
-                                        </ScrollView>
+                                        </View>
 
-                                        <Button variant="secondary" label="ver imagem" onPress={toggleFlip} fullWidth style={{ marginTop: spacing.md }} />
+                                        <Button
+                                            variant="secondary"
+                                            label="ver imagem"
+                                            onPress={toggleFlip}
+                                            fullWidth
+                                            style={{ marginTop: spacing.md }}
+                                        />
                                     </Animated.View>
                                 </View>
                             </View>
@@ -332,7 +437,13 @@ export default function KaizooSelect() {
                         loading={saving}
                         disabled={saving}
                     />
-                    <Button variant="onboardingOutline" label="ver o próximo!" onPress={goNext} fullWidth disabled={saving} />
+                    <Button
+                        variant="onboardingOutline"
+                        label="ver o próximo!"
+                        onPress={goNext}
+                        fullWidth
+                        disabled={saving}
+                    />
                 </View>
             </View>
         </SafeAreaView>
@@ -357,7 +468,12 @@ function ScoreDots({ score = 0, color = "#888" }: { score?: number; color?: stri
         <View style={{ flexDirection: "row", columnGap: 8 }}>
             {Array.from({ length: total }).map((_, i) => {
                 const filled = i < score;
-                return <View key={i} style={[styles.dot, { opacity: filled ? 1 : 0.2, backgroundColor: color }]} />;
+                return (
+                    <View
+                        key={i}
+                        style={[styles.dot, { opacity: filled ? 1 : 0.2, backgroundColor: color }]}
+                    />
+                );
             })}
         </View>
     );
@@ -381,14 +497,17 @@ const styles = StyleSheet.create({
         backgroundColor: "white",
         borderRadius: radius?.lg ?? 16,
         overflow: "hidden",
+        // centraliza e dá respiro nas telas largas
         marginHorizontal: spacing.lg,
-        height: CARD_HEIGHT,
         position: "relative",
+        // dica rnw: stacking context estável
+        ...(Platform.OS === "web" ? ({ willChange: "transform" } as any) : null),
     },
 
     faceFront: {
         ...StyleSheet.absoluteFillObject,
         backfaceVisibility: "hidden",
+        zIndex: 2,
     },
     faceBack: {
         ...StyleSheet.absoluteFillObject,
@@ -396,6 +515,8 @@ const styles = StyleSheet.create({
         backgroundColor: "white",
         padding: spacing.lg,
         paddingTop: 60,
+        zIndex: 3,
+        justifyContent: "flex-start",
     },
 
     cardTitleBand: {
@@ -410,7 +531,6 @@ const styles = StyleSheet.create({
 
     overlayBtn: {
         position: "absolute",
-        bottom: spacing.xl,
         left: spacing.lg,
         right: spacing.lg,
     },

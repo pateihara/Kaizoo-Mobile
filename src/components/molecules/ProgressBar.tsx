@@ -1,5 +1,6 @@
 //src/components/molecules/ProgressBar.tsx
 import { colors } from "@/theme";
+import React from "react";
 import { View } from "react-native";
 
 type Props = { progress: number }; // 0..1
