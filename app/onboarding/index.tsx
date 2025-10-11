@@ -1,21 +1,20 @@
 // app/onboarding/index.tsx
 import { colors, radius, spacing } from "@/theme";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Dimensions,
     FlatList,
     Image,
     NativeScrollEvent,
     NativeSyntheticEvent,
+    Platform,
     Pressable,
     StyleSheet,
     Text,
     View,
+    useWindowDimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-
-const { width, height } = Dimensions.get("window");
 
 type Slide = {
     key: string;
@@ -35,8 +34,7 @@ const SLIDES: Slide[] = [
     {
         key: "desafios",
         title: "DESAFIOS DIÁRIOS",
-        description:
-            "Metodologia Kaizen: um pouquinho a cada dia para grandes conquistas!",
+        description: "Metodologia Kaizen: um pouquinho a cada dia para grandes conquistas!",
         image: require("assets/images/exemploDesafios.png"),
     },
     {
@@ -59,8 +57,9 @@ export default function OnboardingScreen() {
     const router = useRouter();
     const listRef = useRef<FlatList<Slide>>(null);
     const insets = useSafeAreaInsets();
+    const { width, height } = useWindowDimensions();
 
-    // splash de 2s
+    // Splash de 2s
     const [showSplash, setShowSplash] = useState(true);
     useEffect(() => {
         const t = setTimeout(() => setShowSplash(false), 2000);
@@ -69,14 +68,33 @@ export default function OnboardingScreen() {
 
     const [index, setIndex] = useState(0);
 
-    const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-        const i = Math.round(e.nativeEvent.contentOffset.x / width);
-        setIndex(i);
-    };
+    // ✔ Tipagem correta para a prop getItemLayout (usa ArrayLike<Slide>)
+    const getItemLayout = useCallback(
+        (_data: ArrayLike<Slide> | null | undefined, i: number) => ({
+            length: width,
+            offset: width * i,
+            index: i,
+        }),
+        [width]
+    );
+
+    // No Web, preferir onScroll + snap; no mobile, pagingEnabled também funciona
+    const onScroll = useCallback(
+        (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+            const x = e.nativeEvent.contentOffset.x;
+            const i = Math.round(x / Math.max(1, width));
+            if (i !== index) setIndex(i);
+        },
+        [index, width]
+    );
 
     const next = () => {
         if (index < SLIDES.length - 1) {
-            listRef.current?.scrollToIndex({ index: index + 1, animated: true });
+            // Mais confiável em Web do que scrollToIndex
+            listRef.current?.scrollToOffset({
+                offset: (index + 1) * width,
+                animated: true,
+            });
             setIndex((i) => i + 1);
         }
     };
@@ -91,12 +109,14 @@ export default function OnboardingScreen() {
                 <View style={styles.splashContainer}>
                     <Image
                         source={require("assets/images/allTogether.png")}
-                        style={styles.splashImage}
+                        style={[styles.splashImage, { width: width * 0.6 }]}
                         resizeMode="contain"
                     />
                     <Text style={styles.splashTitle}>
-                        Mexa-se<Text style={{ color: "yellow" }}>.</Text>{"\n"}
-                        Evolua<Text style={{ color: "yellow" }}>.</Text>{"\n"}
+                        Mexa-se<Text style={{ color: "yellow" }}>.</Text>
+                        {"\n"}
+                        Evolua<Text style={{ color: "yellow" }}>.</Text>
+                        {"\n"}
                         Divirta-se<Text style={{ color: "yellow" }}>!</Text>
                     </Text>
                 </View>
@@ -116,17 +136,30 @@ export default function OnboardingScreen() {
                         isLast={i === SLIDES.length - 1}
                         onNext={next}
                         onSkip={skipOrFinish}
+                        width={width}
+                        height={height}
                     />
                 )}
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                pagingEnabled
+                // Mobile se vira bem com pagingEnabled; Web com snapToInterval
+                pagingEnabled={Platform.OS !== "web"}
+                snapToInterval={Platform.OS === "web" ? width : undefined}
+                snapToAlignment={Platform.OS === "web" ? "start" : undefined}
+                disableIntervalMomentum={Platform.OS === "web"}
+                decelerationRate={Platform.OS === "web" ? "fast" : "normal"}
                 bounces={false}
-                onMomentumScrollEnd={onMomentumEnd}
+                getItemLayout={getItemLayout}
+                onScroll={onScroll}
+                scrollEventThrottle={16}
+                style={{ flex: 1 }}
             />
 
-            {/* Dots acima dos botões, respeitando a barra do Android */}
-            <View style={[styles.dots, { bottom: insets.bottom + 96 }]}>
+            {/* Dots acima dos botões; não intercepta eventos */}
+            <View
+                pointerEvents="none"
+                style={[styles.dots, { bottom: insets.bottom + 96 }]}
+            >
                 {SLIDES.map((_, i) => (
                     <View key={i} style={[styles.dot, i === index && styles.dotActive]} />
                 ))}
@@ -140,11 +173,15 @@ function SlideCard({
     isLast,
     onNext,
     onSkip,
+    width,
+    height,
 }: {
     slide: Slide;
     isLast: boolean;
     onNext: () => void;
     onSkip: () => void;
+    width: number;
+    height: number;
 }) {
     return (
         <View
@@ -179,11 +216,7 @@ function SlideCard({
 
                 {/* CTA DENTRO DO SLIDE (viaja com o card) */}
                 <View style={{ marginTop: spacing.xl, alignItems: "center" }}>
-                    <Pressable
-                        style={styles.cta}
-                        onPress={isLast ? onSkip : onNext}
-                        hitSlop={8}
-                    >
+                    <Pressable style={styles.cta} onPress={isLast ? onSkip : onNext} hitSlop={8}>
                         <Text style={styles.ctaText}>
                             {isLast ? "criar minha conta" : "continuar"}
                         </Text>
@@ -215,7 +248,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.lg,
     },
     splashImage: {
-        width: width * 0.6,
         height: undefined,
         aspectRatio: 1,
         marginBottom: spacing.lg,
@@ -267,7 +299,7 @@ const styles = StyleSheet.create({
         color: colors.gray?.[600] ?? "#555",
     },
 
-    // Dots
+    // Dots (não colidem com eventos)
     dots: {
         position: "absolute",
         left: 0,
@@ -287,7 +319,7 @@ const styles = StyleSheet.create({
         width: 16,
     },
 
-    // CTA (usado dentro do card)
+    // CTA
     cta: {
         width: "100%",
         height: 48,
