@@ -1,12 +1,13 @@
 // app/kaizoo/select.tsx
 import { useRouter } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     Alert,
     Animated,
     Easing,
     FlatList,
     Image,
+    ImageBackground,
     NativeScrollEvent,
     NativeSyntheticEvent,
     Platform,
@@ -20,9 +21,9 @@ import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
 import { useAuth } from "@/contexts/AuthContext";
 import { finishOnboarding } from "@/services/profile";
-import { colors, radius, spacing } from "@/theme";
+import { radius, spacing } from "@/theme";
 
-// ⚠️ IMPORTS RELATIVOS PARA WEB/VERCEL
+// assets
 import frontdino from "../../assets/images/card-dino.png";
 import frontkaia from "../../assets/images/card-kaia.png";
 import frontkoa from "../../assets/images/card-koa.png";
@@ -49,7 +50,6 @@ type Mascot = {
     };
 };
 
-// cores
 const ACCENT: Record<MascotKey, string> = {
     tato: "#F37997",
     dino: "#FFB24A",
@@ -58,7 +58,6 @@ const ACCENT: Record<MascotKey, string> = {
     penny: "#7E7AF5",
 };
 
-// catálogo
 const MASCOTS: Mascot[] = [
     {
         key: "tato",
@@ -145,7 +144,6 @@ const MASCOTS: Mascot[] = [
     },
 ];
 
-// 👉 rota após escolher
 const NEXT_ROUTE = "/kaizoo/form";
 
 export default function KaizooSelect() {
@@ -153,11 +151,10 @@ export default function KaizooSelect() {
     const insets = useSafeAreaInsets();
     const { width: winW, height: winH } = useWindowDimensions();
 
-    // responsivo: limita largura/altura do card
-    const cardWidth = Math.min(420, Math.max(320, Math.floor(winW * 0.86)));
-    const cardHeight = Math.max(420, Math.min(560, Math.floor(winH * 0.7)));
-
-    const pageWidth = winW; // para snap/scroll
+    // cards menores e mais elegantes
+    const cardWidth = Math.max(300, Math.min(380, Math.floor(winW * 0.88)));
+    const cardHeight = Math.max(360, Math.min(500, Math.floor(winH * 0.60)));
+    const pageWidth = winW;
 
     const { refreshProfile, replaceUser } = useAuth() as {
         refreshProfile?: () => Promise<void>;
@@ -168,69 +165,22 @@ export default function KaizooSelect() {
     const [index, setIndex] = useState(0);
     const [saving, setSaving] = useState(false);
 
-    // flip
-    const [isBack, setIsBack] = useState(false);
-    const flip = useRef(new Animated.Value(0)).current;
-
-    const frontRot = flip.interpolate({
-        inputRange: [0, 180],
-        outputRange: ["0deg", "180deg"],
-    });
-    const backRot = flip.interpolate({
-        inputRange: [0, 180],
-        outputRange: ["180deg", "360deg"],
-    });
-
-    // 👇 extra: controla visibilidade para Web (quando backfaceVisibility não segura)
-    const frontOpacity = flip.interpolate({
-        inputRange: [0, 90, 180],
-        outputRange: [1, 0, 0],
-        extrapolate: "clamp",
-    });
-    const backOpacity = flip.interpolate({
-        inputRange: [0, 90, 180],
-        outputRange: [0, 0, 1],
-        extrapolate: "clamp",
-    });
-
-    const animateTo = (deg: number) =>
-        Animated.timing(flip, {
-            toValue: deg,
-            duration: 450,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-        });
-
-    const resetFlip = () => {
-        setIsBack(false);
-        flip.stopAnimation();
-        flip.setValue(0);
-    };
-
-    const toggleFlip = () => {
-        if (isBack) animateTo(0).start(() => setIsBack(false));
-        else animateTo(180).start(() => setIsBack(true));
-    };
-
-    const goNext = () => {
-        const next = (index + 1) % MASCOTS.length;
-        resetFlip();
-        // usar scrollToOffset para web ser mais sólido
-        listRef.current?.scrollToOffset({ offset: next * pageWidth, animated: true });
-        setIndex(next);
-    };
-
     const onScroll = useCallback(
         (e: NativeSyntheticEvent<NativeScrollEvent>) => {
             const x = e.nativeEvent.contentOffset.x;
             const i = Math.round(x / Math.max(1, pageWidth));
-            if (i !== index) {
-                setIndex(i);
-                resetFlip();
-            }
+            if (i !== index) setIndex(i);
         },
         [index, pageWidth]
     );
+
+    const goNext = () => {
+        const next = (index + 1) % MASCOTS.length;
+        listRef.current?.scrollToOffset({ offset: next * pageWidth, animated: true });
+        setIndex(next);
+    };
+
+    const accent = (k: MascotKey) => ACCENT[k];
 
     const chooseThis = async () => {
         if (saving) return;
@@ -253,8 +203,6 @@ export default function KaizooSelect() {
         }
     };
 
-    const accent = (k: MascotKey) => ACCENT[k];
-
     return (
         <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
             <View style={styles.container}>
@@ -267,7 +215,6 @@ export default function KaizooSelect() {
                         keyExtractor={(m) => m.key}
                         horizontal
                         showsHorizontalScrollIndicator={false}
-                        // Mobile: paging; Web: snap
                         pagingEnabled={Platform.OS !== "web"}
                         snapToInterval={Platform.OS === "web" ? pageWidth : undefined}
                         snapToAlignment={Platform.OS === "web" ? "start" : undefined}
@@ -278,151 +225,17 @@ export default function KaizooSelect() {
                         scrollEventThrottle={16}
                         style={{ flex: 1 }}
                         contentContainerStyle={{ paddingVertical: spacing.lg }}
-                        renderItem={({ item }) => (
+                        renderItem={({ item, index: i }) => (
                             <View style={{ width: pageWidth, alignItems: "center" }}>
-                                <View
-                                    style={[
-                                        styles.card,
-                                        {
-                                            width: cardWidth,
-                                            height: cardHeight,
-                                        },
-                                    ]}
-                                >
-                                    {/* Frente */}
-                                    <Animated.View
-                                        style={[
-                                            styles.faceFront,
-                                            {
-                                                transform: [{ perspective: 1000 }, { rotateY: frontRot }],
-                                                opacity: frontOpacity,
-                                                // RN Web dicas de performance:
-                                                ...(Platform.OS === "web" ? ({ willChange: "transform" } as any) : null),
-                                            },
-                                        ]}
-                                        accessibilityLabel={`Imagem do mascote ${item.title}`}
-                                        pointerEvents={isBack ? "none" : "auto"}
-                                    >
-                                        {item.frontImage ? (
-                                            <Image
-                                                source={item.frontImage}
-                                                style={StyleSheet.absoluteFillObject}
-                                                resizeMode="cover"
-                                            />
-                                        ) : (
-                                            <View style={[StyleSheet.absoluteFillObject, styles.heroPlaceholder]} />
-                                        )}
-
-                                        <View style={styles.cardTitleBand}>
-                                            <Text weight="bold" style={styles.cardTitle}>
-                                                {item.title}
-                                            </Text>
-                                            <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-                                        </View>
-
-                                        <View
-                                            style={[
-                                                styles.overlayBtn,
-                                                { bottom: insets.bottom + spacing.lg, width: cardWidth - spacing.lg * 2 },
-                                            ]}
-                                        >
-                                            <Button
-                                                variant="primary"
-                                                label="Ver personalidade"
-                                                onPress={toggleFlip}
-                                                fullWidth
-                                            />
-                                        </View>
-                                    </Animated.View>
-
-                                    {/* Verso */}
-                                    <Animated.View
-                                        style={[
-                                            styles.faceBack,
-                                            {
-                                                transform: [{ perspective: 1000 }, { rotateY: backRot }],
-                                                opacity: backOpacity,
-                                                paddingBottom: insets.bottom + spacing.md,
-                                                ...(Platform.OS === "web" ? ({ willChange: "transform" } as any) : null),
-                                            },
-                                        ]}
-                                        pointerEvents={isBack ? "auto" : "none"}
-                                    >
-                                        {!!item.backImage && (
-                                            <Image
-                                                source={item.backImage}
-                                                style={styles.badge}
-                                                resizeMode="contain"
-                                                accessible={false}
-                                            />
-                                        )}
-
-                                        <View style={{ rowGap: spacing.md, flexGrow: 1 }}>
-                                            {!!item.personality?.favorite && (
-                                                <View>
-                                                    <Text weight="bold" style={styles.sectionTitle}>
-                                                        ATIVIDADE FAVORITA
-                                                    </Text>
-                                                    <Text style={styles.sectionBody}>{item.personality.favorite}</Text>
-                                                </View>
-                                            )}
-
-                                            {!!item.personality?.traits?.length && (
-                                                <View>
-                                                    <Text weight="bold" style={styles.sectionTitle}>
-                                                        PERSONALIDADE
-                                                    </Text>
-                                                    <View style={{ rowGap: 10 }}>
-                                                        {item.personality.traits!.map((t, i) => (
-                                                            <View key={i} style={styles.traitRow}>
-                                                                <Text style={styles.traitLabel}>{t.label} →</Text>
-                                                                <ScoreDots score={t.score} color={accent(item.key)} />
-                                                            </View>
-                                                        ))}
-                                                    </View>
-                                                </View>
-                                            )}
-
-                                            {!!item.personality?.goals?.length && (
-                                                <View>
-                                                    <Text weight="bold" style={styles.sectionTitle}>
-                                                        OBJETIVOS
-                                                    </Text>
-                                                    <View style={{ rowGap: 8 }}>
-                                                        {item.personality.goals!.map((g, i) => (
-                                                            <View key={i} style={styles.goalRow}>
-                                                                <View
-                                                                    style={[
-                                                                        styles.goalCheck,
-                                                                        { borderColor: accent(item.key) },
-                                                                    ]}
-                                                                >
-                                                                    <Text
-                                                                        style={[
-                                                                            styles.goalCheckMark,
-                                                                            { color: accent(item.key) },
-                                                                        ]}
-                                                                    >
-                                                                        ✓
-                                                                    </Text>
-                                                                </View>
-                                                                <Text style={styles.sectionBody}>{g}</Text>
-                                                            </View>
-                                                        ))}
-                                                    </View>
-                                                </View>
-                                            )}
-                                        </View>
-
-                                        <Button
-                                            variant="secondary"
-                                            label="ver imagem"
-                                            onPress={toggleFlip}
-                                            fullWidth
-                                            style={{ marginTop: spacing.md }}
-                                        />
-                                    </Animated.View>
-                                </View>
+                                <FlipCard
+                                    key={item.key}
+                                    active={i === index}
+                                    width={cardWidth}
+                                    height={cardHeight}
+                                    insetsBottom={insets.bottom}
+                                    item={item}
+                                    accent={accent(item.key)}
+                                />
                             </View>
                         )}
                     />
@@ -450,6 +263,192 @@ export default function KaizooSelect() {
     );
 }
 
+function FlipCard({
+    active,
+    width,
+    height,
+    insetsBottom,
+    item,
+    accent,
+}: {
+    active: boolean;
+    width: number;
+    height: number;
+    insetsBottom: number;
+    item: Mascot;
+    accent: string;
+}) {
+    const flip = useRef(new Animated.Value(0)).current;
+    const [isBack, setIsBack] = useState(false);
+
+    useEffect(() => {
+        // ao perder o foco/saír da tela, sempre volta pra frente
+        if (!active) {
+            flip.stopAnimation();
+            flip.setValue(0);
+            setIsBack(false);
+        }
+    }, [active, flip]);
+
+    const frontRot = flip.interpolate({
+        inputRange: [0, 180],
+        outputRange: ["0deg", "180deg"],
+    });
+    const backRot = flip.interpolate({
+        inputRange: [0, 180],
+        outputRange: ["180deg", "360deg"],
+    });
+
+    const frontOpacity = flip.interpolate({
+        inputRange: [0, 90, 180],
+        outputRange: [1, 0, 0],
+        extrapolate: "clamp",
+    });
+    const backOpacity = flip.interpolate({
+        inputRange: [0, 90, 180],
+        outputRange: [0, 0, 1],
+        extrapolate: "clamp",
+    });
+
+    const animateTo = (deg: number) =>
+        Animated.timing(flip, {
+            toValue: deg,
+            duration: 420,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+        });
+
+    const toggleFlip = () => {
+        if (!active) return; // só o card ativo vira
+        if (isBack) animateTo(0).start(() => setIsBack(false));
+        else animateTo(180).start(() => setIsBack(true));
+    };
+
+    return (
+        <View
+            style={[
+                styles.card,
+                { width, height },
+                Platform.OS === "web" ? ({ willChange: "transform" } as any) : null,
+            ]}
+        >
+            {/* Frente */}
+            <Animated.View
+                style={[
+                    styles.faceFront,
+                    {
+                        transform: [{ perspective: 1000 }, { rotateY: frontRot }],
+                        opacity: frontOpacity,
+                    },
+                ]}
+                pointerEvents={isBack ? "none" : "auto"}
+            >
+                <ImageBackground
+                    source={item.frontImage}
+                    style={StyleSheet.absoluteFillObject}
+                    imageStyle={{ resizeMode: "cover" }}
+                >
+                    {/* faixa de título sobre a imagem */}
+                    <View style={styles.cardTitleBand}>
+                        <Text weight="bold" style={styles.cardTitle}>
+                            {item.title}
+                        </Text>
+                        <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+                    </View>
+
+                    {/* botão fixo no rodapé do card */}
+                    <View
+                        style={[
+                            styles.overlayBtn,
+                            { bottom: insetsBottom + spacing.md, left: spacing.lg, right: spacing.lg },
+                        ]}
+                    >
+                        <Button variant="primary" label="Ver personalidade" onPress={toggleFlip} fullWidth />
+                    </View>
+                </ImageBackground>
+            </Animated.View>
+
+            {/* Verso */}
+            <Animated.View
+                style={[
+                    styles.faceBack,
+                    {
+                        transform: [{ perspective: 1000 }, { rotateY: backRot }],
+                        opacity: backOpacity,
+                        paddingBottom: insetsBottom + spacing.md + 56, // espaço pro botão fixo
+                    },
+                ]}
+                pointerEvents={isBack ? "auto" : "none"}
+            >
+                {/* badge/estrela mais próxima do topo para abrir espaço ao botão */}
+                {!!item.backImage && (
+                    <Image
+                        source={item.backImage}
+                        style={[styles.badge, { marginTop: spacing.sm }]}
+                        resizeMode="contain"
+                    />
+                )}
+
+                {/* conteúdo do verso */}
+                <View style={{ rowGap: spacing.md }}>
+                    {!!item.personality?.favorite && (
+                        <View>
+                            <Text weight="bold" style={styles.sectionTitle}>
+                                ATIVIDADE FAVORITA
+                            </Text>
+                            <Text style={styles.sectionBody}>{item.personality.favorite}</Text>
+                        </View>
+                    )}
+
+                    {!!item.personality?.traits?.length && (
+                        <View>
+                            <Text weight="bold" style={styles.sectionTitle}>
+                                PERSONALIDADE
+                            </Text>
+                            <View style={{ rowGap: 10 }}>
+                                {item.personality.traits!.map((t, i) => (
+                                    <View key={i} style={styles.traitRow}>
+                                        <Text style={styles.traitLabel}>{t.label} →</Text>
+                                        <ScoreDots score={t.score} color={accent} />
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {!!item.personality?.goals?.length && (
+                        <View>
+                            <Text weight="bold" style={styles.sectionTitle}>
+                                OBJETIVOS
+                            </Text>
+                            <View style={{ rowGap: 8 }}>
+                                {item.personality.goals!.map((g, i) => (
+                                    <View key={i} style={styles.goalRow}>
+                                        <View style={[styles.goalCheck, { borderColor: accent }]}>
+                                            <Text style={[styles.goalCheckMark, { color: accent }]}>✓</Text>
+                                        </View>
+                                        <Text style={styles.sectionBody}>{g}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+                </View>
+
+                {/* botão fixo no rodapé do verso */}
+                <View
+                    style={[
+                        styles.overlayBtn,
+                        { bottom: insetsBottom + spacing.md, left: spacing.lg, right: spacing.lg },
+                    ]}
+                >
+                    <Button variant="secondary" label="ver imagem" onPress={toggleFlip} fullWidth />
+                </View>
+            </Animated.View>
+        </View>
+    );
+}
+
 function Step({ title }: { title: string }) {
     return (
         <View style={{ padding: spacing.lg, paddingTop: spacing.xl }}>
@@ -468,12 +467,7 @@ function ScoreDots({ score = 0, color = "#888" }: { score?: number; color?: stri
         <View style={{ flexDirection: "row", columnGap: 8 }}>
             {Array.from({ length: total }).map((_, i) => {
                 const filled = i < score;
-                return (
-                    <View
-                        key={i}
-                        style={[styles.dot, { opacity: filled ? 1 : 0.2, backgroundColor: color }]}
-                    />
-                );
+                return <View key={i} style={[styles.dot, { opacity: filled ? 1 : 0.2, backgroundColor: color }]} />;
             })}
         </View>
     );
@@ -497,10 +491,8 @@ const styles = StyleSheet.create({
         backgroundColor: "white",
         borderRadius: radius?.lg ?? 16,
         overflow: "hidden",
-        // centraliza e dá respiro nas telas largas
         marginHorizontal: spacing.lg,
         position: "relative",
-        // dica rnw: stacking context estável
         ...(Platform.OS === "web" ? ({ willChange: "transform" } as any) : null),
     },
 
@@ -513,45 +505,42 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         backfaceVisibility: "hidden",
         backgroundColor: "white",
-        padding: spacing.lg,
-        paddingTop: 60,
+        paddingHorizontal: spacing.lg,
+        paddingTop: spacing.lg, // menor topo para aproximar conteúdo do botão
         zIndex: 3,
         justifyContent: "flex-start",
     },
 
     cardTitleBand: {
         backgroundColor: "#222",
-        paddingVertical: 12,
+        paddingVertical: 10,
         paddingHorizontal: spacing.md,
     },
-    cardTitle: { color: "white", fontSize: 22, textAlign: "center" },
+    cardTitle: { color: "white", fontSize: 20, textAlign: "center" },
     cardSubtitle: { color: "white", opacity: 0.9, textAlign: "center" },
-
-    heroPlaceholder: { backgroundColor: colors?.gray?.[200] ?? "#eee" },
 
     overlayBtn: {
         position: "absolute",
-        left: spacing.lg,
-        right: spacing.lg,
     },
 
-    badge: { alignSelf: "center", width: 140, height: 140, marginBottom: spacing.md },
-    sectionTitle: { fontSize: 16, marginBottom: 6 },
-    sectionBody: { fontSize: 16 },
+    badge: { alignSelf: "center", width: 120, height: 120, marginBottom: spacing.sm },
+
+    sectionTitle: { fontSize: 15, marginBottom: 6 },
+    sectionBody: { fontSize: 15 },
 
     traitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    traitLabel: { fontSize: 16 },
+    traitLabel: { fontSize: 15 },
 
     goalRow: { flexDirection: "row", alignItems: "center", columnGap: 10 },
     goalCheck: {
-        width: 22,
-        height: 22,
-        borderRadius: 22,
+        width: 20,
+        height: 20,
+        borderRadius: 20,
         borderWidth: 2,
         alignItems: "center",
         justifyContent: "center",
     },
-    goalCheckMark: { fontSize: 14, fontWeight: "700" },
+    goalCheckMark: { fontSize: 12, fontWeight: "700" },
 
-    dot: { width: 16, height: 16, borderRadius: 999 },
+    dot: { width: 14, height: 14, borderRadius: 999 },
 });
