@@ -1,29 +1,28 @@
 // app/kaizoo/select.tsx
-// app/kaizoo/select.tsx
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     Alert,
     Animated,
-    Dimensions,
     Easing,
     FlatList,
     Image,
     NativeScrollEvent,
     NativeSyntheticEvent,
-    ScrollView,
+    Platform,
     StyleSheet,
     View,
+    useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Button from "@/components/atoms/Button";
 import Text from "@/components/atoms/Text";
 import { useAuth } from "@/contexts/AuthContext";
 import { finishOnboarding } from "@/services/profile";
-import { colors, radius, spacing } from "@/theme";
+import { radius, spacing } from "@/theme";
 
-// ⚠️ IMPORTS RELATIVOS PARA WEB/VERCEL
+// assets
 import frontdino from "../../assets/images/card-dino.png";
 import frontkaia from "../../assets/images/card-kaia.png";
 import frontkoa from "../../assets/images/card-koa.png";
@@ -35,14 +34,6 @@ import backkaia from "../../assets/images/StarKaia.png";
 import backkoa from "../../assets/images/StarKoa.png";
 import backpenny from "../../assets/images/StarPenny.png";
 import backtato from "../../assets/images/StarTato.png";
-
-const { width } = Dimensions.get("window");
-
-// 👉 rota após escolher
-const NEXT_ROUTE = "/kaizoo/form";
-
-// 👉 altura fixa do card (a imagem cobre TUDO)
-const CARD_HEIGHT = 560 as const;
 
 type MascotKey = "tato" | "dino" | "koa" | "kaia" | "penny";
 type Mascot = {
@@ -152,10 +143,25 @@ const MASCOTS: Mascot[] = [
     },
 ];
 
+const NEXT_ROUTE = "/kaizoo/form";
+
+// (opcional) micro ajustes por-mascote para PNGs com padding interno
+const OFFSETS: Partial<Record<MascotKey, { x?: number; y?: number }>> = {
+    dino: { y: -6 },
+    kaia: { y: -4 },
+    // adicione outros se precisar
+};
+
 export default function KaizooSelect() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
+    const { width: winW, height: winH } = useWindowDimensions();
 
-    // alguns apps nomeiam diferente; deixei "opcional" pra não quebrar tipagem
+    // cards menores e responsivos
+    const cardWidth = Math.max(300, Math.min(380, Math.floor(winW * 0.88)));
+    const cardHeight = Math.max(360, Math.min(500, Math.floor(winH * 0.60)));
+    const pageWidth = winW;
+
     const { refreshProfile, replaceUser } = useAuth() as {
         refreshProfile?: () => Promise<void>;
         replaceUser?: (u: any) => void;
@@ -165,38 +171,22 @@ export default function KaizooSelect() {
     const [index, setIndex] = useState(0);
     const [saving, setSaving] = useState(false);
 
-    // flip
-    const [isBack, setIsBack] = useState(false);
-    const flip = useRef(new Animated.Value(0)).current;
-    const frontRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["0deg", "180deg"] });
-    const backRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["180deg", "360deg"] });
-    const animateTo = (deg: number) =>
-        Animated.timing(flip, { toValue: deg, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true });
-
-    const resetFlip = () => {
-        setIsBack(false);
-        flip.stopAnimation();
-        flip.setValue(0);
-    };
-    const toggleFlip = () => {
-        if (isBack) animateTo(0).start(() => setIsBack(false));
-        else animateTo(180).start(() => setIsBack(true));
-    };
+    const onScroll = useCallback(
+        (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+            const x = e.nativeEvent.contentOffset.x;
+            const i = Math.round(x / Math.max(1, pageWidth));
+            if (i !== index) setIndex(i);
+        },
+        [index, pageWidth]
+    );
 
     const goNext = () => {
         const next = (index + 1) % MASCOTS.length;
-        resetFlip();
-        listRef.current?.scrollToIndex({ index: next, animated: true });
+        listRef.current?.scrollToOffset({ offset: next * pageWidth, animated: true });
         setIndex(next);
     };
 
-    const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-        const i = Math.round(e.nativeEvent.contentOffset.x / width);
-        if (i !== index) {
-            setIndex(i);
-            resetFlip();
-        }
-    };
+    const accent = (k: MascotKey) => ACCENT[k];
 
     const chooseThis = async () => {
         if (saving) return;
@@ -219,8 +209,6 @@ export default function KaizooSelect() {
         }
     };
 
-    const accent = (k: MascotKey) => ACCENT[k];
-
     return (
         <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
             <View style={styles.container}>
@@ -229,95 +217,31 @@ export default function KaizooSelect() {
                 <View style={{ flex: 1 }}>
                     <FlatList
                         ref={listRef}
-                        horizontal
-                        pagingEnabled
-                        bounces={false}
-                        showsHorizontalScrollIndicator={false}
                         data={MASCOTS}
                         keyExtractor={(m) => m.key}
-                        onMomentumScrollEnd={onMomentumEnd}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        pagingEnabled={Platform.OS !== "web"}
+                        snapToInterval={Platform.OS === "web" ? pageWidth : undefined}
+                        snapToAlignment={Platform.OS === "web" ? "start" : undefined}
+                        disableIntervalMomentum={Platform.OS === "web"}
+                        decelerationRate={Platform.OS === "web" ? "fast" : "normal"}
+                        bounces={false}
+                        onScroll={onScroll}
+                        scrollEventThrottle={16}
                         style={{ flex: 1 }}
                         contentContainerStyle={{ paddingVertical: spacing.lg }}
-                        renderItem={({ item }) => (
-                            <View style={{ width }}>
-                                <View style={styles.card}>
-                                    {/* frente */}
-                                    <Animated.View
-                                        style={[styles.faceFront, { transform: [{ perspective: 1000 }, { rotateY: frontRot }] }]}
-                                        accessibilityLabel={`Imagem do mascote ${item.title}`}
-                                    >
-                                        {item.frontImage ? (
-                                            <Image source={item.frontImage} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-                                        ) : (
-                                            <View style={[StyleSheet.absoluteFillObject, styles.heroPlaceholder]} />
-                                        )}
-
-                                        <View style={styles.cardTitleBand}>
-                                            <Text weight="bold" style={styles.cardTitle}>
-                                                {item.title}
-                                            </Text>
-                                            <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-                                        </View>
-
-                                        <View style={styles.overlayBtn}>
-                                            <Button variant="primary" label="Ver personalidade" onPress={toggleFlip} fullWidth />
-                                        </View>
-                                    </Animated.View>
-
-                                    {/* verso */}
-                                    <Animated.View style={[styles.faceBack, { transform: [{ perspective: 1000 }, { rotateY: backRot }] }]}>
-                                        {!!item.backImage && (
-                                            <Image source={item.backImage} style={styles.badge} resizeMode="contain" accessible={false} />
-                                        )}
-
-                                        <ScrollView contentContainerStyle={{ paddingBottom: spacing.lg }}>
-                                            {!!item.personality?.favorite && (
-                                                <View style={{ marginBottom: spacing.md }}>
-                                                    <Text weight="bold" style={styles.sectionTitle}>
-                                                        ATIVIDADE FAVORITA
-                                                    </Text>
-                                                    <Text style={styles.sectionBody}>{item.personality.favorite}</Text>
-                                                </View>
-                                            )}
-
-                                            {!!item.personality?.traits?.length && (
-                                                <View style={{ marginBottom: spacing.md }}>
-                                                    <Text weight="bold" style={styles.sectionTitle}>
-                                                        PERSONALIDADE
-                                                    </Text>
-                                                    <View style={{ rowGap: 10 }}>
-                                                        {item.personality.traits!.map((t, i) => (
-                                                            <View key={i} style={styles.traitRow}>
-                                                                <Text style={styles.traitLabel}>{t.label} →</Text>
-                                                                <ScoreDots score={t.score} color={accent(item.key)} />
-                                                            </View>
-                                                        ))}
-                                                    </View>
-                                                </View>
-                                            )}
-
-                                            {!!item.personality?.goals?.length && (
-                                                <View style={{ marginBottom: spacing.md }}>
-                                                    <Text weight="bold" style={styles.sectionTitle}>
-                                                        OBJETIVOS
-                                                    </Text>
-                                                    <View style={{ rowGap: 8 }}>
-                                                        {item.personality.goals!.map((g, i) => (
-                                                            <View key={i} style={styles.goalRow}>
-                                                                <View style={[styles.goalCheck, { borderColor: accent(item.key) }]}>
-                                                                    <Text style={[styles.goalCheckMark, { color: accent(item.key) }]}>✓</Text>
-                                                                </View>
-                                                                <Text style={styles.sectionBody}>{g}</Text>
-                                                            </View>
-                                                        ))}
-                                                    </View>
-                                                </View>
-                                            )}
-                                        </ScrollView>
-
-                                        <Button variant="secondary" label="ver imagem" onPress={toggleFlip} fullWidth style={{ marginTop: spacing.md }} />
-                                    </Animated.View>
-                                </View>
+                        renderItem={({ item, index: i }) => (
+                            <View style={{ width: pageWidth, alignItems: "center" }}>
+                                <FlipCard
+                                    key={item.key}
+                                    active={i === index}
+                                    width={cardWidth}
+                                    height={cardHeight}
+                                    insetsBottom={insets.bottom}
+                                    item={item}
+                                    accent={accent(item.key)}
+                                />
                             </View>
                         )}
                     />
@@ -332,10 +256,196 @@ export default function KaizooSelect() {
                         loading={saving}
                         disabled={saving}
                     />
-                    <Button variant="onboardingOutline" label="ver o próximo!" onPress={goNext} fullWidth disabled={saving} />
+                    <Button
+                        variant="onboardingOutline"
+                        label="ver o próximo!"
+                        onPress={goNext}
+                        fullWidth
+                        disabled={saving}
+                    />
                 </View>
             </View>
         </SafeAreaView>
+    );
+}
+
+function FlipCard({
+    active,
+    width,
+    height,
+    insetsBottom,
+    item,
+    accent,
+}: {
+    active: boolean;
+    width: number;
+    height: number;
+    insetsBottom: number;
+    item: Mascot;
+    accent: string;
+}) {
+    const flip = useRef(new Animated.Value(0)).current;
+    const [isBack, setIsBack] = useState(false);
+
+    useEffect(() => {
+        // quando sair do foco, garante frente
+        if (!active) {
+            flip.stopAnimation();
+            flip.setValue(0);
+            setIsBack(false);
+        }
+    }, [active, flip]);
+
+    const frontRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["0deg", "180deg"] });
+    const backRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["180deg", "360deg"] });
+
+    const frontOpacity = flip.interpolate({
+        inputRange: [0, 90, 180],
+        outputRange: [1, 0, 0],
+        extrapolate: "clamp",
+    });
+    const backOpacity = flip.interpolate({
+        inputRange: [0, 90, 180],
+        outputRange: [0, 0, 1],
+        extrapolate: "clamp",
+    });
+
+    const animateTo = (deg: number) =>
+        Animated.timing(flip, {
+            toValue: deg,
+            duration: 420,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+        });
+
+    const toggleFlip = () => {
+        if (!active) return; // só vira se for o card ativo
+        if (isBack) animateTo(0).start(() => setIsBack(false));
+        else animateTo(180).start(() => setIsBack(true));
+    };
+
+    // micro offset por-mascote (opcional)
+    const off = OFFSETS[item.key] ?? {};
+
+    return (
+        <View
+            style={[
+                styles.card,
+                { width, height },
+                Platform.OS === "web" ? ({ willChange: "transform" } as any) : null,
+            ]}
+        >
+            {/* Frente */}
+            <Animated.View
+                style={[
+                    styles.faceFront,
+                    { transform: [{ perspective: 1000 }, { rotateY: frontRot }], opacity: frontOpacity },
+                ]}
+                pointerEvents={isBack ? "none" : "auto"}
+            >
+                {/* imagem 100% centralizada */}
+                <Image
+                    source={item.frontImage}
+                    resizeMode="cover"
+                    style={[
+                        StyleSheet.absoluteFillObject,
+                        Platform.OS === "web"
+                            ? ({ objectFit: "cover", objectPosition: "center" } as any)
+                            : null,
+                        (off.x || off.y) ? { transform: [{ translateX: off.x ?? 0 }, { translateY: off.y ?? 0 }] } : null,
+                    ]}
+                />
+
+                {/* faixa de título absoluta (não empurra a imagem) */}
+                <View style={styles.cardTitleBandAbs}>
+                    <Text weight="bold" style={styles.cardTitle}>
+                        {item.title}
+                    </Text>
+                    <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+                </View>
+
+                {/* botão fixo no rodapé */}
+                <View
+                    style={[
+                        styles.overlayBtn,
+                        { bottom: insetsBottom + spacing.md, left: spacing.lg, right: spacing.lg },
+                    ]}
+                >
+                    <Button variant="primary" label="Ver personalidade" onPress={toggleFlip} fullWidth />
+                </View>
+            </Animated.View>
+
+            {/* Verso */}
+            <Animated.View
+                style={[
+                    styles.faceBack,
+                    {
+                        transform: [{ perspective: 1000 }, { rotateY: backRot }],
+                        opacity: backOpacity,
+                        paddingBottom: insetsBottom + spacing.md + 56, // espaço para o botão fixo
+                    },
+                ]}
+                pointerEvents={isBack ? "auto" : "none"}
+            >
+                {!!item.backImage && (
+                    <Image
+                        source={item.backImage}
+                        style={[styles.badge, { marginTop: spacing.sm }]}
+                        resizeMode="contain"
+                    />
+                )}
+
+                {/* conteúdo */}
+                <View style={{ rowGap: spacing.md }}>
+                    {!!item.personality?.favorite && (
+                        <View>
+                            <Text weight="bold" style={styles.sectionTitle}>ATIVIDADE FAVORITA</Text>
+                            <Text style={styles.sectionBody}>{item.personality.favorite}</Text>
+                        </View>
+                    )}
+
+                    {!!item.personality?.traits?.length && (
+                        <View>
+                            <Text weight="bold" style={styles.sectionTitle}>PERSONALIDADE</Text>
+                            <View style={{ rowGap: 10 }}>
+                                {item.personality.traits!.map((t, i) => (
+                                    <View key={i} style={styles.traitRow}>
+                                        <Text style={styles.traitLabel}>{t.label} →</Text>
+                                        <ScoreDots score={t.score} color={accent} />
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {!!item.personality?.goals?.length && (
+                        <View>
+                            <Text weight="bold" style={styles.sectionTitle}>OBJETIVOS</Text>
+                            <View style={{ rowGap: 8 }}>
+                                {item.personality.goals!.map((g, i) => (
+                                    <View key={i} style={styles.goalRow}>
+                                        <View style={[styles.goalCheck, { borderColor: accent }]}>
+                                            <Text style={[styles.goalCheckMark, { color: accent }]}>✓</Text>
+                                        </View>
+                                        <Text style={styles.sectionBody}>{g}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+                </View>
+
+                {/* botão fixo no rodapé do verso */}
+                <View
+                    style={[
+                        styles.overlayBtn,
+                        { bottom: insetsBottom + spacing.md, left: spacing.lg, right: spacing.lg },
+                    ]}
+                >
+                    <Button variant="secondary" label="ver imagem" onPress={toggleFlip} fullWidth />
+                </View>
+            </Animated.View>
+        </View>
     );
 }
 
@@ -343,9 +453,7 @@ function Step({ title }: { title: string }) {
     return (
         <View style={{ padding: spacing.lg, paddingTop: spacing.xl }}>
             <View style={styles.stepPill}>
-                <Text weight="bold" style={{ textAlign: "center" }}>
-                    {title}
-                </Text>
+                <Text weight="bold" style={{ textAlign: "center" }}>{title}</Text>
             </View>
         </View>
     );
@@ -382,56 +490,57 @@ const styles = StyleSheet.create({
         borderRadius: radius?.lg ?? 16,
         overflow: "hidden",
         marginHorizontal: spacing.lg,
-        height: CARD_HEIGHT,
         position: "relative",
+        ...(Platform.OS === "web" ? ({ willChange: "transform" } as any) : null),
     },
 
     faceFront: {
         ...StyleSheet.absoluteFillObject,
         backfaceVisibility: "hidden",
+        zIndex: 2,
     },
     faceBack: {
         ...StyleSheet.absoluteFillObject,
         backfaceVisibility: "hidden",
         backgroundColor: "white",
-        padding: spacing.lg,
-        paddingTop: 60,
+        paddingHorizontal: spacing.lg,
+        paddingTop: spacing.lg, // topo menor → conteúdo sobe, botão aparece
+        zIndex: 3,
+        justifyContent: "flex-start",
     },
 
-    cardTitleBand: {
+    cardTitleBandAbs: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
         backgroundColor: "#222",
-        paddingVertical: 12,
+        paddingVertical: 10,
         paddingHorizontal: spacing.md,
     },
-    cardTitle: { color: "white", fontSize: 22, textAlign: "center" },
+    cardTitle: { color: "white", fontSize: 20, textAlign: "center" },
     cardSubtitle: { color: "white", opacity: 0.9, textAlign: "center" },
 
-    heroPlaceholder: { backgroundColor: colors?.gray?.[200] ?? "#eee" },
+    overlayBtn: { position: "absolute" },
 
-    overlayBtn: {
-        position: "absolute",
-        bottom: spacing.xl,
-        left: spacing.lg,
-        right: spacing.lg,
-    },
+    badge: { alignSelf: "center", width: 120, height: 120, marginBottom: spacing.sm },
 
-    badge: { alignSelf: "center", width: 140, height: 140, marginBottom: spacing.md },
-    sectionTitle: { fontSize: 16, marginBottom: 6 },
-    sectionBody: { fontSize: 16 },
+    sectionTitle: { fontSize: 15, marginBottom: 6 },
+    sectionBody: { fontSize: 15 },
 
     traitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    traitLabel: { fontSize: 16 },
+    traitLabel: { fontSize: 15 },
 
     goalRow: { flexDirection: "row", alignItems: "center", columnGap: 10 },
     goalCheck: {
-        width: 22,
-        height: 22,
-        borderRadius: 22,
+        width: 20,
+        height: 20,
+        borderRadius: 20,
         borderWidth: 2,
         alignItems: "center",
         justifyContent: "center",
     },
-    goalCheckMark: { fontSize: 14, fontWeight: "700" },
+    goalCheckMark: { fontSize: 12, fontWeight: "700" },
 
-    dot: { width: 16, height: 16, borderRadius: 999 },
+    dot: { width: 14, height: 14, borderRadius: 999 },
 });

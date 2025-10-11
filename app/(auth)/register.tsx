@@ -70,7 +70,11 @@ export default function RegisterScreen() {
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 keyboardVerticalOffset={0}
             >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <TouchableWithoutFeedback
+                    // ✅ desliga o dismiss no Web para não perder foco nos campos
+                    onPress={Platform.OS === "web" ? undefined : Keyboard.dismiss}
+                    accessible={false}
+                >
                     <View style={styles.container}>
                         <ScrollView
                             style={styles.scroll}
@@ -109,6 +113,7 @@ export default function RegisterScreen() {
                                     keyboardType="email-address"
                                     textContentType="emailAddress"
                                     autoComplete="email"
+                                    enterKeyHint="next"
                                     returnKeyType="next"
                                     blurOnSubmit={false}
                                     onSubmitEditing={() => passRef.current?.focus()}
@@ -122,6 +127,7 @@ export default function RegisterScreen() {
                                     secureTextEntry
                                     textContentType="password"
                                     autoComplete="password-new"
+                                    enterKeyHint="next"
                                     returnKeyType="next"
                                     blurOnSubmit={false}
                                     onSubmitEditing={() => confirmRef.current?.focus()}
@@ -135,6 +141,7 @@ export default function RegisterScreen() {
                                     secureTextEntry
                                     textContentType="password"
                                     autoComplete="password-new"
+                                    enterKeyHint="done"
                                     returnKeyType="done"
                                     onSubmitEditing={onCreate}
                                 />

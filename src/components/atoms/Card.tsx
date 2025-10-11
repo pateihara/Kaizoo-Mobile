@@ -1,4 +1,5 @@
 // @/components/atoms/Card.tsx
+import React from "react";
 import { StyleSheet, View, ViewStyle } from "react-native";
 
 type Props = {

@@ -1,7 +1,14 @@
 // components/atoms/Input.tsx
 import { colors, spacing } from "@/theme";
 import React, { forwardRef, useMemo, useState } from "react";
-import { NativeSyntheticEvent, StyleSheet, TextInput, TextInputContentSizeChangeEventData, TextInputProps } from "react-native";
+import {
+    NativeSyntheticEvent,
+    Platform,
+    StyleSheet,
+    TextInput,
+    TextInputContentSizeChangeEventData,
+    TextInputProps,
+} from "react-native";
 
 type Props = TextInputProps & {
     multiline?: boolean;
@@ -39,7 +46,10 @@ const Input = forwardRef<TextInput, Props>(
             e: NativeSyntheticEvent<TextInputContentSizeChangeEventData>
         ) => {
             if (enableAutoGrow) {
-                const h = Math.max(multilineMinHeight, Math.ceil(e.nativeEvent.contentSize.height));
+                const h = Math.max(
+                    multilineMinHeight,
+                    Math.ceil(e.nativeEvent.contentSize.height)
+                );
                 setGrowHeight(Math.min(h, multilineMaxHeight));
             }
             onContentSizeChange?.(e);
@@ -59,6 +69,14 @@ const Input = forwardRef<TextInput, Props>(
                 base.unshift(styles.singleLineBase); // altura fixa só no single line
             }
 
+            // 👇 ajustes pequenos para Web
+            if (Platform.OS === "web") {
+                base.push({
+                    outlineStyle: "none" as any,
+                    cursor: "text" as any,
+                });
+            }
+
             return base;
         }, [multiline, enableAutoGrow, growHeight, multilineMinHeight, style]);
 
@@ -72,7 +90,8 @@ const Input = forwardRef<TextInput, Props>(
                 // quando atingir o max, habilita scroll interno
                 scrollEnabled={
                     multiline
-                        ? (scrollEnabled ?? !!(enableAutoGrow && growHeight && growHeight >= multilineMaxHeight))
+                        ? (scrollEnabled ??
+                            !!(enableAutoGrow && growHeight && growHeight >= multilineMaxHeight))
                         : scrollEnabled
                 }
                 placeholderTextColor={placeholderTextColor ?? (colors.gray?.[600] ?? "#6B6B6B")}

@@ -1,7 +1,7 @@
 //src/components/molecules/LevelBadge.tsx
 import Text from "@/components/atoms/Text";
 import { colors, radius, spacing } from "@/theme";
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { Animated, Easing, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 

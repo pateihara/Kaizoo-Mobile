@@ -1,4 +1,4 @@
-// app/(auth)/login.tsx
+//app/(auth)/login.tsx
 import Button from "@/components/atoms/Button";
 import Input from "@/components/atoms/Input";
 import Text from "@/components/atoms/Text";
@@ -41,7 +41,7 @@ export default function LoginScreen() {
         setLoading(true);
         try {
             await login(email.trim(), pass);
-            router.replace("/");
+            router.replace("/"); // vai cair no redirect para /(tabs)
         } catch (e: any) {
             Alert.alert("Erro ao entrar", e?.message ?? String(e));
         } finally {
@@ -56,7 +56,11 @@ export default function LoginScreen() {
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 keyboardVerticalOffset={0}
             >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <TouchableWithoutFeedback
+                    // ✅ no Web NÃO chamamos Keyboard.dismiss(), senão o clique no input perde foco
+                    onPress={Platform.OS === "web" ? undefined : Keyboard.dismiss}
+                    accessible={false}
+                >
                     <View style={styles.container}>
                         <ScrollView
                             style={styles.scroll}
@@ -85,6 +89,7 @@ export default function LoginScreen() {
                                     keyboardType="email-address"
                                     textContentType="emailAddress"
                                     autoComplete="email"
+                                    enterKeyHint="next"
                                     returnKeyType="next"
                                     blurOnSubmit={false}
                                     onSubmitEditing={() => passRef.current?.focus()}
@@ -98,6 +103,7 @@ export default function LoginScreen() {
                                     secureTextEntry
                                     textContentType="password"
                                     autoComplete="password"
+                                    enterKeyHint="done"
                                     returnKeyType="done"
                                     onSubmitEditing={onLogin}
                                 />

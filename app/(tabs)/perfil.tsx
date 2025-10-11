@@ -1,9 +1,17 @@
-//app/(tabs)/perfil.tsx
 // app/(tabs)/perfil.tsx
+import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Pressable, View } from "react-native";
+import {
+    ActivityIndicator,
+    Alert,
+    Image,
+    Platform,
+    Pressable,
+    Share,
+    View,
+} from "react-native";
 
 import Button from "@/components/atoms/Button";
 import Card from "@/components/atoms/Card";
@@ -28,6 +36,56 @@ type ProfileUI = {
 /** --------- Fallback (bio padrão) --------- */
 const DEFAULT_BIO =
     "Adoro começar o dia com movimento e boas energias. Entre um alongamento e uma pedalada no parque, busco leveza, saúde e motivação no meu ritmo.";
+
+/** --------- Links de convite/compartilhamento (ajuste se quiser) --------- */
+const APP_LINK = "https://kaizoo-mobile.vercel.app";
+const INVITE_LINK = "https://kaizoo-mobile.vercel.app/invite";
+
+/** Helper universal de compartilhamento (iOS/Android/Web + fallback clipboard) */
+async function shareUniversal({
+    title,
+    message,
+    url,
+}: {
+    title: string;
+    message: string;
+    url?: string;
+}) {
+    const fullText = url ? `${message}\n${url}` : message;
+
+    try {
+        // Web com Web Share API
+        // @ts-ignore - navigator.share existe no browser
+        if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.share) {
+            // @ts-ignore
+            await navigator.share({ title, text: message, url });
+            return;
+        }
+
+        // iOS/Android nativo
+        await Share.share(
+            {
+                title,
+                message: fullText, // Android usa 'message'
+                url, // iOS considera 'url' separado
+            },
+            {
+                dialogTitle: title, // Android
+            }
+        );
+    } catch (err: any) {
+        // Fallback: copia pro clipboard
+        try {
+            await Clipboard.setStringAsync(fullText);
+            Alert.alert("Link copiado", "O convite foi copiado para a área de transferência.");
+        } catch {
+            Alert.alert(
+                "Não foi possível compartilhar",
+                "Tente novamente ou verifique as permissões do dispositivo."
+            );
+        }
+    }
+}
 
 /** --------- Component --------- */
 export default function PerfilScreen() {
@@ -57,9 +115,7 @@ export default function PerfilScreen() {
             // 2) Posts (minha galeria = só meus posts)
             const all = await safeFetchPosts();
             const mine = all.filter(
-                (post) =>
-                    post.author === "Você" ||
-                    post.author?.toLowerCase() === myKey
+                (post) => post.author === "Você" || post.author?.toLowerCase() === myKey
             );
 
             const gallery = mine.map((m) => ({
@@ -120,14 +176,22 @@ export default function PerfilScreen() {
     }, [loadAll]);
 
     /** Ações */
-    const onInvite = () => {
-        // implemente seu fluxo de convite (share link/invite API)
-        console.log("Convidar amigos");
+    const onInvite = async () => {
+        await shareUniversal({
+            title: "Convidar amigos",
+            message: "Vem treinar comigo no Kaizoo! Crie seu perfil e entre nas minhas comunidades.",
+            url: INVITE_LINK,
+        });
     };
-    const onShare = () => {
-        // implemente um Share.share(...) aqui se quiser
-        console.log("Compartilhar perfil/app");
+
+    const onShare = async () => {
+        await shareUniversal({
+            title: "Compartilhar Kaizoo",
+            message: "Estou usando o Kaizoo para registrar minhas atividades. Dá uma olhada:",
+            url: APP_LINK,
+        });
     };
+
     const onSignOut = async () => {
         await signOut();
         router.replace("/(auth)/login");
@@ -141,8 +205,7 @@ export default function PerfilScreen() {
 
             // compat: nova API (MediaType.image) ou antiga (MediaTypeOptions.Images)
             const Media = (ImagePicker as any).MediaType ?? (ImagePicker as any).MediaTypeOptions;
-            const mediaImages =
-                (Media && (Media.image || Media.Images)) || "images";
+            const mediaImages = (Media && (Media.image || Media.Images)) || "images";
 
             const res = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: mediaImages as any,
@@ -258,7 +321,6 @@ export default function PerfilScreen() {
                     }}
                 >
                     <Text variant="subtitle" weight="bold">Galeria de Registros</Text>
-                    {/* Sem “ver todas”: tudo fica nesta tela */}
                 </View>
 
                 {/* Grid simples com wrap (evita FlatList dentro de ScrollView) */}

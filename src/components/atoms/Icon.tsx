@@ -1,6 +1,7 @@
 //// @/components/atoms/Icon.tsx
 import { colors } from "@/theme";
 import { Ionicons } from "@expo/vector-icons";
+import React from "react";
 
 type Props = {
     name: React.ComponentProps<typeof Ionicons>["name"];

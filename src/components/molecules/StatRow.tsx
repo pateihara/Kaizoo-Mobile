@@ -1,5 +1,6 @@
 //src/components/molecules/StarRow.tsx
 import { colors, spacing } from "@/theme";
+import React from "react";
 import { View } from "react-native";
 import Text from "../atoms/Text";
 
