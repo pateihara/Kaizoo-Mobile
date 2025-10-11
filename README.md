@@ -112,8 +112,6 @@ Adora visualizar progresso, valoriza recompensas e precisa de treinos curtos e r
 | **Posts/Feed**          | **API real → fallback** | Render + Neon → **seed** | `GET /community/posts`. Se **404**, a UI usa **seed** local |
 | **Likes/Comentários**   | **API real → fallback** | Render + Neon → **seed** | `POST /community/posts/:id/like` • `POST /community/posts/:id/comments` com **contagem sincronizada** |
 
-\* Armazenamento da **foto de perfil** pode ser FS local ou objeto em nuvem; depende da configuração atual do backend.
-
 ### 🔀 Alternar entre API real e Mock (seed)
 No **app** há uma flag pública:
 
@@ -228,44 +226,15 @@ Por padrão: `http://localhost:4000` (ou conforme seu `PORT`).
 No **frontend**, ajuste `EXPO_PUBLIC_API_URL`:
 
 - **Emulador** (Android/iOS na mesma máquina do backend):  
-  - Android Emulator: `http://10.0.2.2:4000`  
+  - Android Emulator: `http://00.0.0.0:4000`  
   - iOS Simulator: `http://localhost:4000`
-- **Celular físico via Expo Go:** use o **IP da sua máquina** (ex.: `http://192.168.1.10:4000`).  
+- **Celular físico via Expo Go:** use o **IP da sua máquina** (ex.: `http://000.000.0.00:4000`).  
   Se necessário, rode o Expo com `--host tunnel`.
 
 Descubra seu IP com `ipconfig` (Windows) ou `ifconfig` (Linux/Mac).
 
 ---
 
-## 📁 Estrutura do Repositório (app)
-```
-app/
-  (tabs)/
-    comunidade.tsx        # feed, like, comentários (fallback seed)
-    desafios.tsx          # ativar/entrar/completar desafios (XP)
-    atividade.tsx         # registro e estimativa de calorias
-    perfil.tsx            # foto + mascote
-  galeria/
-    [id].tsx              # detalhe do post (front-only)
-    index.tsx             # minha galeria (front-only)
-  kaizoo/
-    select.tsx            # onboarding: seleção/flip do mascote
-assets/images/            # ícones e artes
-components/
-  atoms/  molecules/  templates/
-contexts/
-  ActivityContext.tsx     # progresso, XP, espelho de desafios ativos
-  AuthContext.tsx         # sessão do usuário
-services/
-  activities.ts
-  challenges.ts
-  community.ts
-  profile.ts
-theme/
-  index.ts                # tokens (colors, spacing, radius)
-```
-
----
 
 ## 🛟 Troubleshooting
 
