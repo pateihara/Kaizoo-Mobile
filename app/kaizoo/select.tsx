@@ -7,7 +7,6 @@ import {
     Easing,
     FlatList,
     Image,
-    ImageBackground,
     NativeScrollEvent,
     NativeSyntheticEvent,
     Platform,
@@ -146,12 +145,19 @@ const MASCOTS: Mascot[] = [
 
 const NEXT_ROUTE = "/kaizoo/form";
 
+// (opcional) micro ajustes por-mascote para PNGs com padding interno
+const OFFSETS: Partial<Record<MascotKey, { x?: number; y?: number }>> = {
+    dino: { y: -6 },
+    kaia: { y: -4 },
+    // adicione outros se precisar
+};
+
 export default function KaizooSelect() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { width: winW, height: winH } = useWindowDimensions();
 
-    // cards menores e mais elegantes
+    // cards menores e responsivos
     const cardWidth = Math.max(300, Math.min(380, Math.floor(winW * 0.88)));
     const cardHeight = Math.max(360, Math.min(500, Math.floor(winH * 0.60)));
     const pageWidth = winW;
@@ -282,7 +288,7 @@ function FlipCard({
     const [isBack, setIsBack] = useState(false);
 
     useEffect(() => {
-        // ao perder o foco/saír da tela, sempre volta pra frente
+        // quando sair do foco, garante frente
         if (!active) {
             flip.stopAnimation();
             flip.setValue(0);
@@ -290,14 +296,8 @@ function FlipCard({
         }
     }, [active, flip]);
 
-    const frontRot = flip.interpolate({
-        inputRange: [0, 180],
-        outputRange: ["0deg", "180deg"],
-    });
-    const backRot = flip.interpolate({
-        inputRange: [0, 180],
-        outputRange: ["180deg", "360deg"],
-    });
+    const frontRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["0deg", "180deg"] });
+    const backRot = flip.interpolate({ inputRange: [0, 180], outputRange: ["180deg", "360deg"] });
 
     const frontOpacity = flip.interpolate({
         inputRange: [0, 90, 180],
@@ -319,10 +319,13 @@ function FlipCard({
         });
 
     const toggleFlip = () => {
-        if (!active) return; // só o card ativo vira
+        if (!active) return; // só vira se for o card ativo
         if (isBack) animateTo(0).start(() => setIsBack(false));
         else animateTo(180).start(() => setIsBack(true));
     };
+
+    // micro offset por-mascote (opcional)
+    const off = OFFSETS[item.key] ?? {};
 
     return (
         <View
@@ -336,36 +339,40 @@ function FlipCard({
             <Animated.View
                 style={[
                     styles.faceFront,
-                    {
-                        transform: [{ perspective: 1000 }, { rotateY: frontRot }],
-                        opacity: frontOpacity,
-                    },
+                    { transform: [{ perspective: 1000 }, { rotateY: frontRot }], opacity: frontOpacity },
                 ]}
                 pointerEvents={isBack ? "none" : "auto"}
             >
-                <ImageBackground
+                {/* imagem 100% centralizada */}
+                <Image
                     source={item.frontImage}
-                    style={StyleSheet.absoluteFillObject}
-                    imageStyle={{ resizeMode: "cover" }}
-                >
-                    {/* faixa de título sobre a imagem */}
-                    <View style={styles.cardTitleBand}>
-                        <Text weight="bold" style={styles.cardTitle}>
-                            {item.title}
-                        </Text>
-                        <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-                    </View>
+                    resizeMode="cover"
+                    style={[
+                        StyleSheet.absoluteFillObject,
+                        Platform.OS === "web"
+                            ? ({ objectFit: "cover", objectPosition: "center" } as any)
+                            : null,
+                        (off.x || off.y) ? { transform: [{ translateX: off.x ?? 0 }, { translateY: off.y ?? 0 }] } : null,
+                    ]}
+                />
 
-                    {/* botão fixo no rodapé do card */}
-                    <View
-                        style={[
-                            styles.overlayBtn,
-                            { bottom: insetsBottom + spacing.md, left: spacing.lg, right: spacing.lg },
-                        ]}
-                    >
-                        <Button variant="primary" label="Ver personalidade" onPress={toggleFlip} fullWidth />
-                    </View>
-                </ImageBackground>
+                {/* faixa de título absoluta (não empurra a imagem) */}
+                <View style={styles.cardTitleBandAbs}>
+                    <Text weight="bold" style={styles.cardTitle}>
+                        {item.title}
+                    </Text>
+                    <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+                </View>
+
+                {/* botão fixo no rodapé */}
+                <View
+                    style={[
+                        styles.overlayBtn,
+                        { bottom: insetsBottom + spacing.md, left: spacing.lg, right: spacing.lg },
+                    ]}
+                >
+                    <Button variant="primary" label="Ver personalidade" onPress={toggleFlip} fullWidth />
+                </View>
             </Animated.View>
 
             {/* Verso */}
@@ -375,12 +382,11 @@ function FlipCard({
                     {
                         transform: [{ perspective: 1000 }, { rotateY: backRot }],
                         opacity: backOpacity,
-                        paddingBottom: insetsBottom + spacing.md + 56, // espaço pro botão fixo
+                        paddingBottom: insetsBottom + spacing.md + 56, // espaço para o botão fixo
                     },
                 ]}
                 pointerEvents={isBack ? "auto" : "none"}
             >
-                {/* badge/estrela mais próxima do topo para abrir espaço ao botão */}
                 {!!item.backImage && (
                     <Image
                         source={item.backImage}
@@ -389,22 +395,18 @@ function FlipCard({
                     />
                 )}
 
-                {/* conteúdo do verso */}
+                {/* conteúdo */}
                 <View style={{ rowGap: spacing.md }}>
                     {!!item.personality?.favorite && (
                         <View>
-                            <Text weight="bold" style={styles.sectionTitle}>
-                                ATIVIDADE FAVORITA
-                            </Text>
+                            <Text weight="bold" style={styles.sectionTitle}>ATIVIDADE FAVORITA</Text>
                             <Text style={styles.sectionBody}>{item.personality.favorite}</Text>
                         </View>
                     )}
 
                     {!!item.personality?.traits?.length && (
                         <View>
-                            <Text weight="bold" style={styles.sectionTitle}>
-                                PERSONALIDADE
-                            </Text>
+                            <Text weight="bold" style={styles.sectionTitle}>PERSONALIDADE</Text>
                             <View style={{ rowGap: 10 }}>
                                 {item.personality.traits!.map((t, i) => (
                                     <View key={i} style={styles.traitRow}>
@@ -418,9 +420,7 @@ function FlipCard({
 
                     {!!item.personality?.goals?.length && (
                         <View>
-                            <Text weight="bold" style={styles.sectionTitle}>
-                                OBJETIVOS
-                            </Text>
+                            <Text weight="bold" style={styles.sectionTitle}>OBJETIVOS</Text>
                             <View style={{ rowGap: 8 }}>
                                 {item.personality.goals!.map((g, i) => (
                                     <View key={i} style={styles.goalRow}>
@@ -453,9 +453,7 @@ function Step({ title }: { title: string }) {
     return (
         <View style={{ padding: spacing.lg, paddingTop: spacing.xl }}>
             <View style={styles.stepPill}>
-                <Text weight="bold" style={{ textAlign: "center" }}>
-                    {title}
-                </Text>
+                <Text weight="bold" style={{ textAlign: "center" }}>{title}</Text>
             </View>
         </View>
     );
@@ -506,12 +504,16 @@ const styles = StyleSheet.create({
         backfaceVisibility: "hidden",
         backgroundColor: "white",
         paddingHorizontal: spacing.lg,
-        paddingTop: spacing.lg, // menor topo para aproximar conteúdo do botão
+        paddingTop: spacing.lg, // topo menor → conteúdo sobe, botão aparece
         zIndex: 3,
         justifyContent: "flex-start",
     },
 
-    cardTitleBand: {
+    cardTitleBandAbs: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
         backgroundColor: "#222",
         paddingVertical: 10,
         paddingHorizontal: spacing.md,
@@ -519,9 +521,7 @@ const styles = StyleSheet.create({
     cardTitle: { color: "white", fontSize: 20, textAlign: "center" },
     cardSubtitle: { color: "white", opacity: 0.9, textAlign: "center" },
 
-    overlayBtn: {
-        position: "absolute",
-    },
+    overlayBtn: { position: "absolute" },
 
     badge: { alignSelf: "center", width: 120, height: 120, marginBottom: spacing.sm },
 
